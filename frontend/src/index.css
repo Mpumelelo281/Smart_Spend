@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* NFR: WCAG 2.1 AA — a visible, high-contrast focus ring everywhere,
+   never removed by a reset, so keyboard/screen-reader users always know
+   what's focused. */
+:focus-visible {
+  outline: 3px solid #2f7bf6;
+  outline-offset: 2px;
+}

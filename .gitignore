@@ -1,0 +1,27 @@
+# --- Python / Django ---
+backend/.venv/
+backend/__pycache__/
+**/__pycache__/
+*.pyc
+backend/.env
+backend/*.sqlite3
+backend/staticfiles/
+backend/.pytest_cache/
+backend/.coverage
+backend/htmlcov/
+.coverage
+.pytest_cache/
+
+# --- Node / React ---
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/*.local
+
+# --- Docker / infra ---
+*.log
+.DS_Store
+Thumbs.db
+
+# --- Editors ---
+.idea/

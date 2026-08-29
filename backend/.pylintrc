@@ -1,0 +1,14 @@
+[MASTER]
+load-plugins=pylint_django
+django-settings-module=smartspend.settings
+ignore=migrations,.venv
+
+[MESSAGES CONTROL]
+disable=
+    missing-module-docstring,
+    missing-class-docstring,
+    missing-function-docstring,
+    too-few-public-methods,
+
+[FORMAT]
+max-line-length=110
