@@ -221,6 +221,14 @@ ENFORCE_EMAIL_DOMAIN_RESTRICTION = env.bool("ENFORCE_EMAIL_DOMAIN_RESTRICTION", 
 # enforced) everywhere; only ever set True in a local .env.
 SKIP_AUTH_VERIFICATION_FOR_TESTING = env.bool("SKIP_AUTH_VERIFICATION_FOR_TESTING", default=False)
 
+# apps/catalog/adapters/serpapi_google_shopping.py — live product search.
+# Blank by default: SerpApiGoogleShoppingAdapter.is_configured() returns
+# False and live_search.py silently skips it, so the app still works
+# (against seeded/previously-fetched data) with no key set at all.
+SERPAPI_KEY = env("SERPAPI_KEY", default="")
+SERPAPI_GOOGLE_DOMAIN = env("SERPAPI_GOOGLE_DOMAIN", default="google.co.za")
+SERPAPI_COUNTRY = env("SERPAPI_COUNTRY", default="za")
+
 AUTHENTICATION_BACKENDS = [
     "django.contrib.auth.backends.ModelBackend",
 ]

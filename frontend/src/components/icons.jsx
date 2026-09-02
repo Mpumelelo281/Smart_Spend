@@ -104,3 +104,21 @@ export function IconPin({ className }) {
     </svg>
   );
 }
+
+export function IconCart({ className }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} {...base}>
+      <circle cx="9" cy="20" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="18" cy="20" r="1.4" fill="currentColor" stroke="none" />
+      <path d="M3 4h2l2.4 11.5a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L21 8H6" />
+    </svg>
+  );
+}
+
+export function IconMinus({ className }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} {...base}>
+      <path d="M5 12h14" />
+    </svg>
+  );
+}

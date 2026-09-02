@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from .models import CartItem
+
 
 class PriceSearchResultSerializer(serializers.Serializer):
     """Shapes one PriceRecord (joined with its Product/Retailer) into a
@@ -26,3 +28,46 @@ class PriceSearchResultSerializer(serializers.Serializer):
 
     distance_km = serializers.DecimalField(max_digits=6, decimal_places=1, allow_null=True)
     retrieved_at = serializers.DateTimeField()
+
+
+class CartAddSerializer(serializers.Serializer):
+    product_id = serializers.UUIDField()
+    retailer_id = serializers.UUIDField()
+    quantity = serializers.IntegerField(min_value=1, default=1)
+
+
+class CartItemQuantitySerializer(serializers.Serializer):
+    quantity = serializers.IntegerField(min_value=1)
+
+
+class CartItemSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source="product.name")
+    category = serializers.CharField(source="product.category")
+    color = serializers.SerializerMethodField()
+    size = serializers.SerializerMethodField()
+    retailer_name = serializers.CharField(source="retailer.name")
+    line_total = serializers.DecimalField(max_digits=8, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = CartItem
+        fields = [
+            "cart_item_id",
+            "product_id",
+            "product_name",
+            "category",
+            "color",
+            "size",
+            "retailer_id",
+            "retailer_name",
+            "price",
+            "delivery_cost",
+            "quantity",
+            "line_total",
+            "added_at",
+        ]
+
+    def get_color(self, obj):
+        return (obj.product.attributes or {}).get("color")
+
+    def get_size(self, obj):
+        return (obj.product.attributes or {}).get("size")

@@ -3,9 +3,13 @@ import { Route, Routes } from "react-router-dom";
 
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import BudgetSetup from "./pages/BudgetSetup.jsx";
+import Cart from "./pages/Cart.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
+import ForgotPassword from "./pages/ForgotPassword.jsx";
 import Login from "./pages/Login.jsx";
+import Profile from "./pages/Profile.jsx";
 import Register from "./pages/Register.jsx";
+import ResetPassword from "./pages/ResetPassword.jsx";
 import Search from "./pages/Search.jsx";
 import VerifyEmail from "./pages/VerifyEmail.jsx";
 
@@ -25,11 +29,21 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/verify-email" element={<VerifyEmail />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route
         path="/"
         element={
           <ProtectedRoute>
             <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute>
+            <Profile />
           </ProtectedRoute>
         }
       />
@@ -46,6 +60,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <Search />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/cart"
+        element={
+          <ProtectedRoute role="STUDENT">
+            <Cart />
           </ProtectedRoute>
         }
       />

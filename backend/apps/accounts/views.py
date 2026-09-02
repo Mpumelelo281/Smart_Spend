@@ -18,10 +18,13 @@ import base64
 from io import BytesIO
 
 import qrcode
+from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
 from django.conf import settings
 from django.core import signing
 from django.shortcuts import get_object_or_404
+from django.utils.encoding import force_bytes, force_str
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
@@ -31,9 +34,12 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .audit import log_action
 from .models import StudentProfile, User
 from .serializers import (
+    ChangePasswordSerializer,
     LoginSerializer,
     MFAChallengeSerializer,
     MFASetupConfirmSerializer,
+    PasswordResetConfirmSerializer,
+    PasswordResetRequestSerializer,
     RegisterSerializer,
     StudentProfileSerializer,
     VerifyEmailSerializer,
@@ -232,3 +238,89 @@ class MeView(APIView):
                 "profile": StudentProfileSerializer(profile).data if profile else None,
             }
         )
+
+    def patch(self, request):
+        # campus/residence/disbursement_day only — allowance_amount and
+        # profile_id are read_only on StudentProfileSerializer, so a
+        # student editing their own profile can never touch either.
+        profile = get_object_or_404(StudentProfile, user=request.user)
+        serializer = StudentProfileSerializer(profile, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        log_action("PROFILE_UPDATED", actor=request.user, target=profile)
+        return self.get(request)
+
+
+class ChangePasswordView(APIView):
+    """Authenticated password change — distinct from the forgot-password
+    flow below, which doesn't require knowing the current password.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth"
+
+    def post(self, request):
+        serializer = ChangePasswordSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+
+        request.user.set_password(serializer.validated_data["new_password"])
+        request.user.save(update_fields=["password"])
+        log_action("PASSWORD_CHANGED", actor=request.user, target=request.user)
+        return Response({"detail": "Password changed."})
+
+
+class PasswordResetRequestView(APIView):
+    """Always returns 200 with the same generic message whether or not the
+    email matches an account — a distinguishable response here would let
+    an attacker enumerate registered DUT email addresses.
+    """
+
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth"
+
+    def post(self, request):
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data["email"].lower().strip()
+
+        user = User.objects.filter(email=email).first()
+        if user is not None:
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            token = default_token_generator.make_token(user)
+            reset_url = f"{settings.FRONTEND_BASE_URL}/reset-password?uid={uid}&token={token}"
+            send_mail(
+                subject="Reset your SmartSpend password",
+                message=f"Reset your password: {reset_url}\n\nIf you didn't request this, ignore this email.",
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+            )
+            log_action("PASSWORD_RESET_REQUESTED", actor=user, target=user)
+
+        return Response({"detail": "If that email is registered, a reset link has been sent."})
+
+
+class PasswordResetConfirmView(APIView):
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth"
+
+    def post(self, request):
+        serializer = PasswordResetConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        try:
+            user_id = force_str(urlsafe_base64_decode(data["uid"]))
+            user = User.objects.get(pk=user_id)
+        except (User.DoesNotExist, ValueError, TypeError, OverflowError):
+            return Response({"detail": "Invalid or expired reset link."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not default_token_generator.check_token(user, data["token"]):
+            return Response({"detail": "Invalid or expired reset link."}, status=status.HTTP_400_BAD_REQUEST)
+
+        user.set_password(data["new_password"])
+        user.save(update_fields=["password"])
+        log_action("PASSWORD_RESET_COMPLETED", actor=user, target=user)
+        return Response({"detail": "Password reset. You can now log in."})

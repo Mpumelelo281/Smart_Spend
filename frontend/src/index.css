@@ -13,3 +13,16 @@ body {
   outline: 3px solid #2f7bf6;
   outline-offset: 2px;
 }
+
+/* NFR: WCAG 2.1 AA — a student with vestibular sensitivity can turn
+   motion off at the OS level; every decorative animation added for the
+   login page must honour that, not just the ones we remember to guard. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

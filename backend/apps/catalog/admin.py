@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import PriceRecord, Product, Retailer
+from .models import CartItem, PriceRecord, Product, Retailer
 
 
 @admin.register(Retailer)
@@ -19,4 +19,10 @@ class ProductAdmin(admin.ModelAdmin):
 @admin.register(PriceRecord)
 class PriceRecordAdmin(admin.ModelAdmin):
     list_display = ["product", "retailer", "price", "delivery_cost", "retrieved_at"]
+    list_filter = ["retailer"]
+
+
+@admin.register(CartItem)
+class CartItemAdmin(admin.ModelAdmin):
+    list_display = ["profile", "product", "retailer", "quantity", "line_total", "added_at"]
     list_filter = ["retailer"]

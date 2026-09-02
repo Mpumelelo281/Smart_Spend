@@ -13,6 +13,8 @@ import uuid
 
 from django.db import models
 
+from apps.accounts.models import StudentProfile
+
 
 class Retailer(models.Model):
     class IntegrationType(models.TextChoices):
@@ -99,3 +101,38 @@ class PriceRecord(models.Model):
         # Rule 3: total landed cost, not item price, is the figure the
         # interface leads with and the primary sort key in Sprint 2 search.
         return self.price + self.delivery_cost
+
+
+class CartItem(models.Model):
+    """Not one of the 11 ERD entities — a lightweight "what am I planning
+    to buy" list, added on top so a student can see how a search result
+    stacks up against what's left in their budget before actually buying
+    anything. price/delivery_cost are snapshotted at add-time (not a live
+    FK to PriceRecord) so a cart total doesn't silently change underneath
+    the student if a later live-search refresh updates the price.
+    """
+
+    cart_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    profile = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name="cart_items")
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="cart_items")
+    retailer = models.ForeignKey(Retailer, on_delete=models.CASCADE, related_name="cart_items")
+    price = models.DecimalField(max_digits=8, decimal_places=2)
+    delivery_cost = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    quantity = models.PositiveIntegerField(default=1)
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "cart_item"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["profile", "product", "retailer"], name="one_cart_line_per_product_per_retailer"
+            ),
+            models.CheckConstraint(check=models.Q(quantity__gte=1), name="cart_quantity_at_least_one"),
+        ]
+
+    def __str__(self):
+        return f"{self.quantity}x {self.product_id}@{self.retailer_id} for {self.profile_id}"
+
+    @property
+    def line_total(self):
+        return (self.price * self.quantity) + self.delivery_cost

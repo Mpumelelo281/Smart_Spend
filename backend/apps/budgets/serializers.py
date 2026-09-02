@@ -6,6 +6,7 @@ from django.db.models.functions import Coalesce
 from rest_framework import serializers
 
 from .models import Budget, BudgetCategory, Transaction
+from .notifications import check_category_threshold
 
 
 class BudgetCategoryInputSerializer(serializers.Serializer):
@@ -39,6 +40,12 @@ class TransactionSerializer(serializers.ModelSerializer):
         if category.budget.profile.user_id != request.user.user_id:
             raise serializers.ValidationError("You may only log transactions against your own budget.")
         return category
+
+    def create(self, validated_data):
+        instance = super().create(validated_data)
+        # Rule 10. Synchronous for now — see apps/notifications/models.py.
+        check_category_threshold(instance.category)
+        return instance
 
 
 class BudgetSerializer(serializers.ModelSerializer):

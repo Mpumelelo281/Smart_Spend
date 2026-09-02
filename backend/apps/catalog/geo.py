@@ -1,12 +1,15 @@
-"""Distance-from-campus for search results.
+"""Distance-from-… for search results.
 
-There is no real geolocation input in this app yet — a student's only
-location signal is the free-text `StudentProfile.campus` they typed at
-registration (see apps/accounts/models.py). This maps DUT's actual campus
-names to their coordinates so "how far is the store" can be computed
-without asking the student for GPS access. An unrecognised campus string
-(typo, or a campus not in this list) simply gets no distance in results —
-never a fabricated one.
+Two sources of "where is the student", in priority order:
+  1. Real browser geolocation (navigator.geolocation, opt-in, sent as
+     ?lat=&lon= — see ProductSearchView) when the student allows it.
+  2. A lookup from the free-text `StudentProfile.campus` they typed at
+     registration, mapping DUT's actual campus names to coordinates, used
+     only when (1) isn't available (permission denied, unsupported
+     browser, or the request just didn't include coordinates).
+An unrecognised campus string (typo, or a campus not in this list), with
+no browser coordinates either, simply gets no distance in results — never
+a fabricated one.
 """
 
 import math
@@ -44,9 +47,31 @@ def haversine_km(lat1, lon1, lat2, lon2) -> Decimal:
     return Decimal(str(round(EARTH_RADIUS_KM * c, 1)))
 
 
+def distance_from_point_km(lat, lon, retailer):
+    """Real-geolocation variant. Returns None only if the retailer itself
+    has no store coordinates (e.g. an online-only retailer) — the origin
+    is trusted as given.
+    """
+    if retailer.latitude is None or retailer.longitude is None:
+        return None
+    return haversine_km(lat, lon, retailer.latitude, retailer.longitude)
+
+
 def distance_from_campus_km(campus: str, retailer):
     """Returns a Decimal km distance, or None if either endpoint is unknown."""
     origin = campus_coordinates(campus)
     if origin is None or retailer.latitude is None or retailer.longitude is None:
         return None
     return haversine_km(origin[0], origin[1], retailer.latitude, retailer.longitude)
+
+
+def resolve_distance_km(campus: str, lat, lon, retailer):
+    """Prefers real coordinates (lat/lon both present and parseable) over
+    the campus lookup — see module docstring for the priority order.
+    """
+    if lat is not None and lon is not None:
+        try:
+            return distance_from_point_km(float(lat), float(lon), retailer)
+        except (TypeError, ValueError):
+            pass  # fall through to the campus lookup
+    return distance_from_campus_km(campus, retailer)

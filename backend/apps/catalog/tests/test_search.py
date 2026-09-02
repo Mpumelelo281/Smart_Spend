@@ -3,7 +3,7 @@ from decimal import Decimal
 import pytest
 from django.utils import timezone
 
-from apps.catalog.geo import distance_from_campus_km
+from apps.catalog.geo import distance_from_campus_km, resolve_distance_km
 from apps.catalog.models import PriceRecord, Product, Retailer
 
 pytestmark = pytest.mark.django_db
@@ -101,3 +101,30 @@ def test_unknown_campus_yields_no_distance():
 def test_search_requires_authentication(api_client):
     response = api_client.get("/api/v1/catalog/search/")
     assert response.status_code == 401
+
+
+def test_browser_geolocation_overrides_campus_lookup(authenticated_client, catalog):
+    # Real coordinates a long way from both the campus lookup and the
+    # retailer, purely to prove *these* coordinates were used, not the
+    # campus fallback.
+    response = authenticated_client.get(
+        "/api/v1/catalog/search/", {"q": "deodorant", "lat": "-33.9249", "lon": "18.4241"}
+    )
+    near_result = next(r for r in response.data["results"] if r["retailer_name"] == "Near Store")
+    assert float(near_result["distance_km"]) > 1000  # Cape Town to Durban, not campus-to-store
+
+
+def test_resolve_distance_km_falls_back_on_malformed_coordinates():
+    retailer = Retailer(latitude=Decimal("-29.8578"), longitude=Decimal("31.0206"))
+    result = resolve_distance_km("Steve Biko", "not-a-number", "31.0", retailer)
+    assert result is not None  # fell back to the campus lookup instead of crashing
+
+
+def test_suggestions_requires_two_characters(authenticated_client, catalog):
+    response = authenticated_client.get("/api/v1/catalog/search/suggestions/", {"q": "d"})
+    assert response.data["results"] == []
+
+
+def test_suggestions_matches_partial_name(authenticated_client, catalog):
+    response = authenticated_client.get("/api/v1/catalog/search/suggestions/", {"q": "deo"})
+    assert {"name": "Test Deodorant", "category": "Toiletries"} in response.data["results"]

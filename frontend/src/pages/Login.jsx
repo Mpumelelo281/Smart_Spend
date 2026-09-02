@@ -116,6 +116,11 @@ export default function Login() {
             setError={setFieldError}
             autoComplete="current-password"
           />
+          <p className="-mt-2 mb-4 text-right">
+            <Link to="/forgot-password" className="text-xs font-semibold text-brand-600 hover:underline">
+              Forgot password?
+            </Link>
+          </p>
           {formError && (
             <p role="alert" className="mb-4 text-sm font-medium text-red-600">
               {formError}
@@ -124,7 +129,7 @@ export default function Login() {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full rounded-lg bg-brand-600 py-2.5 font-semibold text-white shadow-card transition-colors hover:bg-brand-700 disabled:opacity-50"
+            className="w-full rounded-lg bg-brand-600 py-2.5 font-semibold text-white shadow-card transition-all hover:bg-brand-700 active:scale-[0.98] disabled:opacity-50"
           >
             {submitting ? "Checking…" : "Continue"}
           </button>
@@ -169,7 +174,7 @@ export default function Login() {
           <button
             type="submit"
             disabled={submitting || code.length !== 6}
-            className="w-full rounded-lg bg-emerald-600 py-2.5 font-semibold text-white shadow-card transition-colors hover:bg-emerald-700 disabled:opacity-50"
+            className="w-full rounded-lg bg-emerald-600 py-2.5 font-semibold text-white shadow-card transition-all hover:bg-emerald-700 active:scale-[0.98] disabled:opacity-50"
           >
             {submitting ? "Verifying…" : "Enable & log in"}
           </button>
@@ -196,7 +201,7 @@ export default function Login() {
           <button
             type="submit"
             disabled={submitting || code.length !== 6}
-            className="w-full rounded-lg bg-brand-600 py-2.5 font-semibold text-white shadow-card transition-colors hover:bg-brand-700 disabled:opacity-50"
+            className="w-full rounded-lg bg-brand-600 py-2.5 font-semibold text-white shadow-card transition-all hover:bg-brand-700 active:scale-[0.98] disabled:opacity-50"
           >
             {submitting ? "Verifying…" : "Log in"}
           </button>
