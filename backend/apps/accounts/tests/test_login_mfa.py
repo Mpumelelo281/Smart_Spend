@@ -74,3 +74,44 @@ def test_mfa_verify_wrong_code_rejected(api_client, student_user):
     )
 
     assert response.status_code == 401
+
+
+def test_mfa_reset_requires_correct_password(authenticated_client, student_user):
+    student_user.mfa_secret = pyotp.random_base32()
+    student_user.mfa_enabled = True
+    student_user.save()
+
+    response = authenticated_client.post(
+        "/api/v1/auth/mfa/reset/", {"current_password": "wrong-password"}, format="json"
+    )
+
+    assert response.status_code == 400
+    student_user.refresh_from_db()
+    assert student_user.mfa_enabled is True
+
+
+def test_mfa_reset_clears_enrolment_and_requires_setup_again(authenticated_client, student_user):
+    student_user.mfa_secret = pyotp.random_base32()
+    student_user.mfa_enabled = True
+    student_user.save()
+
+    response = authenticated_client.post(
+        "/api/v1/auth/mfa/reset/", {"current_password": "Correct-Horse-9!"}, format="json"
+    )
+    assert response.status_code == 200
+
+    student_user.refresh_from_db()
+    assert student_user.mfa_enabled is False
+    assert student_user.mfa_secret == ""
+
+    login = authenticated_client.post(
+        "/api/v1/auth/login/", {"email": student_user.email, "password": "Correct-Horse-9!"}, format="json"
+    )
+    assert login.data["mfa_setup_required"] is True
+
+
+def test_mfa_reset_requires_authentication(api_client):
+    response = api_client.post(
+        "/api/v1/auth/mfa/reset/", {"current_password": "Correct-Horse-9!"}, format="json"
+    )
+    assert response.status_code == 401

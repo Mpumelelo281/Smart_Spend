@@ -17,7 +17,7 @@ export default defineConfig({
         name: "SmartSpend",
         short_name: "SmartSpend",
         description: "Budgeting and price comparison for NSFAS-funded students.",
-        theme_color: "#0f2543",
+        theme_color: "#052e1f",
         background_color: "#f1f5f9",
         display: "standalone",
         start_url: "/",

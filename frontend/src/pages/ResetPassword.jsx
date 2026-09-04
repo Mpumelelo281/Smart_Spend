@@ -4,6 +4,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api/client.js";
 import AuthShell from "../components/AuthShell.jsx";
 import FormField from "../components/FormField.jsx";
+import { IconEye, IconEyeOff } from "../components/icons.jsx";
 import { validatePassword } from "../validators.js";
 
 export default function ResetPassword() {
@@ -12,6 +13,7 @@ export default function ResetPassword() {
   const token = searchParams.get("token");
 
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
@@ -79,7 +81,7 @@ export default function ResetPassword() {
         <FormField
           id="password"
           label="New password"
-          type="password"
+          type={showPassword ? "text" : "password"}
           value={password}
           onChange={setPassword}
           validate={validatePassword}
@@ -87,6 +89,16 @@ export default function ResetPassword() {
           setError={(_, message) => setError(message)}
           hint="At least 10 characters."
           autoComplete="new-password"
+          trailing={
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+            >
+              {showPassword ? <IconEyeOff className="h-4 w-4" /> : <IconEye className="h-4 w-4" />}
+            </button>
+          }
         />
         <button
           type="submit"
@@ -95,6 +107,11 @@ export default function ResetPassword() {
         >
           {submitting ? "Resetting…" : "Reset password"}
         </button>
+        <p className="mt-5 text-center text-sm text-slate-500 dark:text-slate-400">
+          <Link to="/login" className="font-semibold text-brand-600 hover:underline dark:text-brand-400">
+            Back to login
+          </Link>
+        </p>
       </form>
     </AuthShell>
   );

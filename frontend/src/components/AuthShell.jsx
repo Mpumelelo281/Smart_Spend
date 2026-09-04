@@ -1,102 +1,136 @@
-import { IconChart, IconMoon, IconSearch, IconSun, IconWallet } from "./icons.jsx";
+import { Link } from "react-router-dom";
+
+import AuthSlideshow from "./AuthSlideshow.jsx";
+import { IconChart, IconMoon, IconShield, IconSun, IconTarget } from "./icons.jsx";
 import Logo from "./Logo.jsx";
+import PhoneMockup from "./PhoneMockup.jsx";
 import { useTheme } from "../context/ThemeContext.jsx";
 
 const FEATURES = [
-  { icon: IconWallet, text: "Split your NSFAS allowance into categories that actually hold" },
-  { icon: IconSearch, text: "Compare real prices across stores before you buy" },
-  { icon: IconChart, text: "See exactly where last month's allowance went" },
+  { icon: IconShield, title: "Secure", text: "Your data is protected with industry-standard security." },
+  { icon: IconChart, title: "Insightful", text: "Get clear insights and make smarter financial decisions." },
+  { icon: IconTarget, title: "Goal Oriented", text: "Set goals and track progress to financial freedom." },
 ];
 
-function ThemeToggle({ light }) {
+function ThemePillToggle() {
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === "dark";
   return (
-    <button
-      onClick={toggleTheme}
-      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-      title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-      className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors ${
-        light
-          ? "text-white/80 hover:bg-white/10"
-          : "text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-navy-800"
-      }`}
-    >
-      {isDark ? <IconSun className="h-5 w-5" /> : <IconMoon className="h-5 w-5" />}
-    </button>
+    <div className="flex items-center gap-0.5 rounded-full bg-slate-100 p-1 dark:bg-navy-800">
+      <button
+        onClick={() => isDark && toggleTheme()}
+        aria-label="Light mode"
+        aria-pressed={!isDark}
+        className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors ${
+          !isDark ? "bg-white text-amber-500 shadow-sm" : "text-slate-400 hover:text-slate-300"
+        }`}
+      >
+        <IconSun className="h-4 w-4" />
+      </button>
+      <button
+        onClick={() => !isDark && toggleTheme()}
+        aria-label="Dark mode"
+        aria-pressed={isDark}
+        className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors ${
+          isDark ? "bg-navy-950 text-brand-400 shadow-sm" : "text-slate-400 hover:text-slate-500"
+        }`}
+      >
+        <IconMoon className="h-4 w-4" />
+      </button>
+    </div>
   );
 }
 
-// Split-screen shell for the three pre-login screens (Login, Register,
-// VerifyEmail): a branded panel with the logo and value proposition on
-// desktop, collapsing to a single centered card on mobile. `title` is
-// used as a React key on the form panel so switching between Login's
-// steps (credentials -> MFA setup -> MFA verify) replays the entrance
-// animation instead of just swapping content instantly.
+// Full-viewport split layout: dark-green branding panel + white form panel,
+// each stretching the full window height (no floating card, no page margin
+// around it). `title` is used as a React key on the form content so
+// switching between Login's steps (credentials -> MFA setup -> MFA verify)
+// replays the entrance animation instead of just swapping content instantly.
 export default function AuthShell({ title, subtitle, children }) {
   return (
-    <div className="flex min-h-screen bg-white dark:bg-navy-950">
+    <div className="grid min-h-screen w-full bg-white dark:bg-navy-900 lg:grid-cols-2">
       {/* Branding panel — desktop only */}
-      <div className="relative hidden w-[42%] flex-col justify-between overflow-hidden bg-gradient-to-br from-navy-950 via-navy-800 to-brand-600 px-12 py-10 lg:flex">
+      <div className="relative hidden flex-col overflow-hidden bg-gradient-to-br from-forest-950 via-forest-900 to-forest-700 px-10 py-10 lg:flex xl:px-14 xl:py-14">
+        <AuthSlideshow className="opacity-[0.12] mix-blend-luminosity" />
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute -left-24 -top-24 h-80 w-80 animate-blob rounded-full bg-brand-400/20 blur-3xl"
+          className="pointer-events-none absolute -left-20 -top-20 h-72 w-72 animate-blob rounded-full bg-brand-400/20 blur-3xl"
         />
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute -bottom-32 -right-16 h-96 w-96 animate-blob-slow rounded-full bg-navy-700/40 blur-3xl"
+          className="pointer-events-none absolute -bottom-24 -right-10 h-80 w-80 animate-blob-slow rounded-full bg-emerald-500/10 blur-3xl"
         />
 
-        <Logo size={40} variant="light" className="relative animate-fade-in-up" />
+        <Logo size={34} variant="light" tagline="Spend smart. Live better." className="relative animate-fade-in-up" />
 
-        <div className="relative">
+        <div className="relative mt-8">
           <h2
-            className="animate-fade-in-up text-3xl font-extrabold leading-tight text-white"
+            className="animate-fade-in-up text-[28px] font-extrabold leading-tight text-white"
             style={{ animationDelay: "80ms" }}
           >
-            Make your allowance go further.
+            Take control of <br />
+            your money, <span className="text-brand-400">achieve</span> your{" "}
+            <span className="text-brand-400">goals.</span>
           </h2>
+          <span
+            className="mt-3 block h-1 w-14 animate-fade-in-up rounded-full bg-brand-500"
+            style={{ animationDelay: "140ms" }}
+          />
           <p
-            className="mt-3 max-w-sm animate-fade-in-up text-brand-100"
-            style={{ animationDelay: "150ms" }}
+            className="mt-4 max-w-xs animate-fade-in-up text-sm text-white/75"
+            style={{ animationDelay: "180ms" }}
           >
-            Budgeting and price comparison built for NSFAS-funded students.
+            SmartSpend helps you budget, track expenses and reach your financial goals with
+            confidence.
           </p>
-          <ul className="mt-8 space-y-4">
-            {FEATURES.map(({ icon: Icon, text }, i) => (
-              <li
-                key={text}
-                className="flex animate-fade-in-up items-start gap-3"
-                style={{ animationDelay: `${220 + i * 90}ms` }}
-              >
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/10 text-white">
-                  <Icon className="h-4 w-4" />
-                </span>
-                <span className="pt-1 text-sm text-brand-50">{text}</span>
-              </li>
-            ))}
-          </ul>
         </div>
 
-        <p className="relative text-xs text-brand-200/70">
-          &copy; {new Date().getFullYear()} SmartSpend. Built for DUT students.
-        </p>
+        <div
+          className="relative mt-6 mb-4 flex flex-1 items-center justify-center lg:mb-6 xl:mb-10 2xl:mb-16 animate-fade-in-up"
+          style={{ animationDelay: "260ms" }}
+        >
+          <PhoneMockup />
+        </div>
+
+        <div className="relative grid grid-cols-3 gap-3">
+          {FEATURES.map(({ icon: Icon, title: t, text }, i) => (
+            <div
+              key={t}
+              className="animate-fade-in-up rounded-xl bg-white/5 p-3 ring-1 ring-white/10 backdrop-blur-sm"
+              style={{ animationDelay: `${320 + i * 90}ms` }}
+            >
+              <Icon className="h-4 w-4 text-brand-400" />
+              <p className="mt-1.5 text-xs font-semibold text-white">{t}</p>
+              <p className="mt-0.5 text-[10px] leading-snug text-white/60">{text}</p>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Form panel */}
-      <div className="relative flex flex-1 flex-col justify-center px-4 py-12 sm:px-6 lg:px-16">
-        <div className="absolute right-5 top-5 lg:right-8 lg:top-8">
-          <ThemeToggle light={false} />
+      <div className="relative flex min-h-screen flex-col px-6 py-8 sm:px-10 lg:px-16">
+        <div className="flex items-center justify-between">
+          <Logo size={30} className="lg:hidden" />
+          <div className="ml-auto flex items-center gap-4">
+            <ThemePillToggle />
+          </div>
         </div>
 
-        <div key={title} className="mx-auto w-full max-w-sm animate-fade-in-up">
-          <Logo size={36} className="mb-8 animate-pop-in lg:hidden" />
+        <div className="flex flex-1 flex-col justify-center">
+          <div key={title} className="mx-auto w-full max-w-sm animate-fade-in-up">
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{title}</h1>
+            {subtitle && <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">{subtitle}</p>}
 
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{title}</h1>
-          {subtitle && <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">{subtitle}</p>}
-
-          <div className="mt-7">{children}</div>
+            <div className="mt-7">{children}</div>
+          </div>
         </div>
+
+        <p className="pb-2 text-center text-xs text-slate-400 dark:text-slate-600">
+          &copy; {new Date().getFullYear()} SmartSpend. All rights reserved. ·{" "}
+          <Link to="/privacy" className="hover:underline">
+            Privacy Policy
+          </Link>
+        </p>
       </div>
     </div>
   );

@@ -4,6 +4,15 @@ import { Link, useNavigate } from "react-router-dom";
 import { api, setTokens } from "../api/client.js";
 import AuthShell from "../components/AuthShell.jsx";
 import FormField from "../components/FormField.jsx";
+import {
+  IconEye,
+  IconEyeOff,
+  IconArrowLeft,
+  IconArrowRight,
+  IconLock,
+  IconMail,
+  IconShield,
+} from "../components/icons.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { validateEmailFormat, validateRequired } from "../validators.js";
 
@@ -16,6 +25,8 @@ export default function Login() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -37,6 +48,14 @@ export default function Login() {
 
     setSubmitting(true);
     try {
+      // "Remember me" widens the session by asking for a longer-lived
+      // refresh token client-side isn't meaningful here — the backend
+      // issues a fixed 7-day refresh token regardless (see SIMPLE_JWT in
+      // settings.py) — so this only controls whether we persist the
+      // session past closing the tab, via localStorage either way
+      // (api/client.js already always uses localStorage). Left wired up
+      // for a future "session vs. persistent" distinction rather than
+      // silently doing nothing.
       const { data } = await api.post("/auth/login/", { email, password });
 
       // SKIP_AUTH_VERIFICATION_FOR_TESTING (backend, local-dev only) skips
@@ -83,8 +102,15 @@ export default function Login() {
     }
   }
 
+  function handleBackToCredentials() {
+    setStep("credentials");
+    setChallenge(null);
+    setCode("");
+    setFormError("");
+  }
+
   const titles = {
-    credentials: ["Welcome back", "Log in to manage your budget."],
+    credentials: ["Welcome back!", "Sign in to continue to SmartSpend"],
     "mfa-setup": ["Set up 2-factor login", null],
     "mfa-verify": ["Enter your code", null],
   };
@@ -103,52 +129,93 @@ export default function Login() {
             validate={validateEmailFormat}
             error={errors.email}
             setError={setFieldError}
+            icon={IconMail}
+            placeholder="Enter your email address"
             autoComplete="username"
           />
           <FormField
             id="password"
             label="Password"
-            type="password"
+            type={showPassword ? "text" : "password"}
             value={password}
             onChange={setPassword}
             validate={validateRequired("Password")}
             error={errors.password}
             setError={setFieldError}
+            icon={IconLock}
+            placeholder="Enter your password"
             autoComplete="current-password"
+            labelRight={
+              <Link to="/forgot-password" className="text-xs font-semibold text-brand-600 hover:underline dark:text-brand-400">
+                Forgot password?
+              </Link>
+            }
+            trailing={
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              >
+                {showPassword ? <IconEyeOff className="h-4 w-4" /> : <IconEye className="h-4 w-4" />}
+              </button>
+            }
           />
-          <p className="-mt-2 mb-4 text-right">
-            <Link to="/forgot-password" className="text-xs font-semibold text-brand-600 hover:underline">
-              Forgot password?
-            </Link>
-          </p>
+
+          <label className="mb-4 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-navy-700 dark:bg-navy-800"
+            />
+            Remember me
+          </label>
+
           {formError && (
-            <p role="alert" className="mb-4 text-sm font-medium text-red-600">
+            <p role="alert" className="mb-4 text-sm font-medium text-red-600 dark:text-red-400">
               {formError}
             </p>
           )}
+
           <button
             type="submit"
             disabled={submitting}
-            className="w-full rounded-lg bg-brand-600 py-2.5 font-semibold text-white shadow-card transition-all hover:bg-brand-700 active:scale-[0.98] disabled:opacity-50"
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 py-2.5 font-semibold text-white shadow-card transition-all hover:bg-brand-700 active:scale-[0.98] disabled:opacity-50"
           >
-            {submitting ? "Checking…" : "Continue"}
+            {submitting ? "Signing in…" : "Sign in"}
+            {!submitting && <IconArrowRight className="h-4 w-4" />}
           </button>
-          <p className="mt-5 text-center text-sm text-slate-500">
-            New here?{" "}
-            <Link to="/register" className="font-semibold text-brand-600 hover:underline">
-              Create an account
+
+          <p className="mt-5 text-center text-sm text-slate-600 dark:text-slate-400">
+            Don&apos;t have an account?{" "}
+            <Link to="/register" className="font-semibold text-brand-600 hover:underline dark:text-brand-400">
+              Sign up
             </Link>
+          </p>
+
+          <p className="mt-4 flex items-center justify-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+            <IconShield className="h-3.5 w-3.5 text-brand-600 dark:text-brand-400" />
+            We never share your information with anyone.
           </p>
         </form>
       )}
 
       {step === "mfa-setup" && (
         <form onSubmit={handleMfaSubmit} noValidate>
-          <p className="mb-4 text-sm text-slate-600">
+          <button
+            type="button"
+            onClick={handleBackToCredentials}
+            className="mb-4 flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+          >
+            <IconArrowLeft className="h-4 w-4" />
+            Back
+          </button>
+          <p className="mb-4 text-sm text-slate-600 dark:text-slate-400">
             Scan this code with an authenticator app (Google Authenticator, Authy, etc.), then enter
             the 6-digit code it shows.
           </p>
-          <div className="mb-4 flex justify-center rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="mb-4 flex justify-center rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-navy-700 dark:bg-navy-800">
             <img
               src={`data:image/png;base64,${challenge.qr_code_base64}`}
               alt="MFA enrolment QR code"
@@ -167,14 +234,14 @@ export default function Login() {
             autoComplete="one-time-code"
           />
           {formError && (
-            <p role="alert" className="mb-4 text-sm font-medium text-red-600">
+            <p role="alert" className="mb-4 text-sm font-medium text-red-600 dark:text-red-400">
               {formError}
             </p>
           )}
           <button
             type="submit"
             disabled={submitting || code.length !== 6}
-            className="w-full rounded-lg bg-emerald-600 py-2.5 font-semibold text-white shadow-card transition-all hover:bg-emerald-700 active:scale-[0.98] disabled:opacity-50"
+            className="w-full rounded-lg bg-brand-600 py-2.5 font-semibold text-white shadow-card transition-all hover:bg-brand-700 active:scale-[0.98] disabled:opacity-50"
           >
             {submitting ? "Verifying…" : "Enable & log in"}
           </button>
@@ -183,7 +250,17 @@ export default function Login() {
 
       {step === "mfa-verify" && (
         <form onSubmit={handleMfaSubmit} noValidate>
-          <p className="mb-4 text-sm text-slate-600">Enter the 6-digit code from your authenticator app.</p>
+          <button
+            type="button"
+            onClick={handleBackToCredentials}
+            className="mb-4 flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+          >
+            <IconArrowLeft className="h-4 w-4" />
+            Back
+          </button>
+          <p className="mb-4 text-sm text-slate-600 dark:text-slate-400">
+            Enter the 6-digit code from your authenticator app.
+          </p>
           <FormField
             id="code"
             label="6-digit code"
@@ -194,7 +271,7 @@ export default function Login() {
             autoComplete="one-time-code"
           />
           {formError && (
-            <p role="alert" className="mb-4 text-sm font-medium text-red-600">
+            <p role="alert" className="mb-4 text-sm font-medium text-red-600 dark:text-red-400">
               {formError}
             </p>
           )}

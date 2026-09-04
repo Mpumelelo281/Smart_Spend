@@ -30,6 +30,38 @@ class BudgetCategorySerializer(serializers.ModelSerializer):
         return obj.transactions.aggregate(total=Coalesce(Sum("amount"), Decimal("0")))["total"]
 
 
+class BudgetCategoryCreateSerializer(serializers.Serializer):
+    """Ad-hoc category creation for the "Other" option in the log-expense
+    form — spend that doesn't fit anything the student pre-allocated.
+    Distinct from BudgetCategoryInputSerializer (which requires an
+    allocated_amount because it feeds Rule 1's allowance check at budget
+    creation time): an ad-hoc category always starts at R0 allocated, so it
+    never touches Budget.total_allocated or the allowance comparison — it
+    just gives that spend somewhere to go. Re-selecting a name that already
+    exists on the budget returns the existing category instead of erroring,
+    so retyping the same "Other" category twice doesn't fragment spend
+    across duplicate rows.
+    """
+
+    name = serializers.CharField(max_length=60)
+
+    def validate_name(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("Category name is required.")
+        return value
+
+    def create(self, validated_data):
+        budget = self.context["budget"]
+        name = validated_data["name"]
+
+        existing = BudgetCategory.objects.filter(budget=budget, name__iexact=name).first()
+        if existing is not None:
+            return existing
+
+        return BudgetCategory.objects.create(budget=budget, name=name, allocated_amount=Decimal("0"))
+
+
 class TransactionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Transaction

@@ -1,11 +1,18 @@
 from django.shortcuts import get_object_or_404
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from apps.accounts.permissions import IsStudent
 
 from .models import Budget, Transaction
-from .serializers import BudgetCreateSerializer, BudgetSerializer, TransactionSerializer
+from .serializers import (
+    BudgetCategoryCreateSerializer,
+    BudgetCategorySerializer,
+    BudgetCreateSerializer,
+    BudgetSerializer,
+    TransactionSerializer,
+)
 
 
 class BudgetListCreateView(generics.ListCreateAPIView):
@@ -50,3 +57,20 @@ class TransactionCreateView(generics.CreateAPIView):
     permission_classes = [permissions.IsAuthenticated, IsStudent]
     serializer_class = TransactionSerializer
     queryset = Transaction.objects.all()
+
+
+class BudgetCategoryCreateView(APIView):
+    """Backs the "Other" option in the log-expense form: lets a student add
+    a category to their own existing budget on the fly, for spend that
+    doesn't fit anything they pre-allocated. See
+    BudgetCategoryCreateSerializer for why this never touches Rule 1.
+    """
+
+    permission_classes = [permissions.IsAuthenticated, IsStudent]
+
+    def post(self, request, budget_id):
+        budget = get_object_or_404(Budget, pk=budget_id, profile__user=request.user)
+        serializer = BudgetCategoryCreateSerializer(data=request.data, context={"budget": budget})
+        serializer.is_valid(raise_exception=True)
+        category = serializer.save()
+        return Response(BudgetCategorySerializer(category).data, status=status.HTTP_201_CREATED)

@@ -1,5 +1,6 @@
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
+from django.utils import timezone
 from rest_framework import serializers
 
 from .models import StudentProfile, User
@@ -10,6 +11,11 @@ class RegisterSerializer(serializers.Serializer):
     """FR: student/parent/admin-style self-registration, gated to a DUT
     email domain, with format validation client-side-mirrored here because
     client-side checks are not trustworthy on their own (Rule 2).
+
+    popia_consent is required, not optional: POPIA requires consent to
+    exist before personal information (email, campus, residence below) is
+    collected, so this is checked before create() ever runs — there is no
+    path that stores a profile without a recorded consent timestamp.
     """
 
     email = serializers.EmailField()
@@ -17,6 +23,7 @@ class RegisterSerializer(serializers.Serializer):
     campus = serializers.CharField(max_length=120)
     residence = serializers.CharField(max_length=120, required=False, allow_blank=True)
     disbursement_day = serializers.IntegerField(min_value=1, max_value=31, default=1)
+    popia_consent = serializers.BooleanField(write_only=True)
 
     def validate_email(self, value):
         value = value.lower().strip()
@@ -29,13 +36,23 @@ class RegisterSerializer(serializers.Serializer):
         validate_password(value)
         return value
 
+    def validate_popia_consent(self, value):
+        if not value:
+            raise serializers.ValidationError(
+                "You must agree to the Privacy Policy to create an account."
+            )
+        return value
+
     def create(self, validated_data):
         password = validated_data.pop("password")
         campus = validated_data.pop("campus")
         residence = validated_data.pop("residence", "")
         disbursement_day = validated_data.pop("disbursement_day", 1)
+        validated_data.pop("popia_consent")
 
-        user = User.objects.create_user(email=validated_data["email"], password=password)
+        user = User.objects.create_user(
+            email=validated_data["email"], password=password, popia_consent_at=timezone.now()
+        )
         StudentProfile.objects.create(
             user=user, campus=campus, residence=residence, disbursement_day=disbursement_day
         )
@@ -100,6 +117,20 @@ class ChangePasswordSerializer(serializers.Serializer):
     def validate_new_password(self, value):
         validate_password(value, user=self.context["request"].user)
         return value
+
+
+class MFAResetSerializer(serializers.Serializer):
+    current_password = serializers.CharField(write_only=True)
+
+    def validate_current_password(self, value):
+        user = self.context["request"].user
+        if not user.check_password(value):
+            raise serializers.ValidationError("Current password is incorrect.")
+        return value
+
+
+class ResendVerificationSerializer(serializers.Serializer):
+    email = serializers.EmailField()
 
 
 class PasswordResetRequestSerializer(serializers.Serializer):

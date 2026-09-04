@@ -79,8 +79,8 @@ export default function ForgotPassword() {
         >
           {submitting ? "Sending…" : "Send reset link"}
         </button>
-        <p className="mt-5 text-center text-sm text-slate-500">
-          <Link to="/login" className="font-semibold text-brand-600 hover:underline">
+        <p className="mt-5 text-center text-sm text-slate-500 dark:text-slate-400">
+          <Link to="/login" className="font-semibold text-brand-600 hover:underline dark:text-brand-400">
             Back to login
           </Link>
         </p>

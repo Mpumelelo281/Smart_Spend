@@ -23,5 +23,9 @@ frontend/*.local
 .DS_Store
 Thumbs.db
 
+# --- Original uncompressed source images (11-22MB each) — the app uses
+# --- the resized/compressed copies in frontend/public/images/ instead. ---
+/images/
+
 # --- Editors ---
 .idea/

@@ -5,9 +5,11 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Matches the reference wireframes: a dark navy sidebar against a
-        // light, card-based content area, blue primary actions, green for
-        // confirm/save, amber/red for alert priority badges.
+        // Dark navy stays the app shell's structural colour (sidebar,
+        // dark-mode surfaces). `brand` is the accent/interactive colour —
+        // green, per the reference design — and every button/link/badge
+        // already built references `brand-*` semantically, so this one
+        // change re-colours the whole app consistently, not just login.
         navy: {
           950: "#0b1a2e",
           900: "#0f2543",
@@ -15,11 +17,22 @@ export default {
           700: "#1d4573",
         },
         brand: {
-          50: "#eff6ff",
-          100: "#dbeafe",
-          500: "#2f7bf6",
-          600: "#2563eb",
-          700: "#1d4ed8",
+          50: "#ecfdf5",
+          100: "#d1fae5",
+          400: "#34d399",
+          500: "#22c55e",
+          600: "#16a34a",
+          700: "#15803d",
+        },
+        // Deep green, used only for the login/register branding panel's
+        // background gradient (matches the reference exactly) — kept
+        // separate from `navy` so the app shell's own dark surfaces don't
+        // change colour.
+        forest: {
+          950: "#052e1f",
+          900: "#0a3f2a",
+          800: "#0f5233",
+          700: "#166a3f",
         },
       },
       boxShadow: {
@@ -46,6 +59,10 @@ export default {
           "33%": { transform: "translate(4%, -6%) scale(1.08)" },
           "66%": { transform: "translate(-3%, 4%) scale(0.96)" },
         },
+        float: {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-10px)" },
+        },
       },
       animation: {
         "fade-in-up": "fade-in-up 0.5s ease-out both",
@@ -53,6 +70,7 @@ export default {
         "pop-in": "pop-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both",
         blob: "blob 14s ease-in-out infinite",
         "blob-slow": "blob 18s ease-in-out infinite reverse",
+        float: "float 3.4s ease-in-out infinite",
       },
     },
   },

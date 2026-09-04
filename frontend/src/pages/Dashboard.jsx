@@ -14,19 +14,26 @@ const today = now.toISOString().slice(0, 10);
 // the backend's threshold notifications (Rule 10: BUDGET_ALERT_THRESHOLD_PCT).
 const LOW_BALANCE_REMAINING_FRACTION = 0.2;
 
+const OTHER_CATEGORY = "__other__";
+
 function LogExpenseForm({ budget, onLogged }) {
   const [categoryId, setCategoryId] = useState(budget.categories[0]?.category_id ?? "");
+  const [customCategoryName, setCustomCategoryName] = useState("");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  const isOther = categoryId === OTHER_CATEGORY;
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
 
     const amountError = validateMoneyAmount(amount);
-    const categoryError = validateRequired("Category")(categoryId);
+    const categoryError = isOther
+      ? validateRequired("Category name")(customCategoryName)
+      : validateRequired("Category")(categoryId);
     if (amountError || categoryError) {
       setError(amountError || categoryError);
       return;
@@ -34,14 +41,27 @@ function LogExpenseForm({ budget, onLogged }) {
 
     setSubmitting(true);
     try {
+      // "Other" has no BudgetCategory yet — create it on the fly (or reuse
+      // one with the same name, server-side) before logging against it, so
+      // spend that doesn't fit a pre-set category still has somewhere to go.
+      let targetCategoryId = categoryId;
+      if (isOther) {
+        const { data: category } = await api.post(`/budgets/${budget.budget_id}/categories/`, {
+          name: customCategoryName,
+        });
+        targetCategoryId = category.category_id;
+      }
+
       await api.post("/budgets/transactions/", {
-        category: categoryId,
+        category: targetCategoryId,
         amount,
         purchase_date: today,
         description,
       });
       setAmount("");
       setDescription("");
+      setCustomCategoryName("");
+      setCategoryId(budget.categories[0]?.category_id ?? "");
       await onLogged();
     } catch (err) {
       setError(err.response?.data?.amount?.[0] || "Could not log that expense. Please try again.");
@@ -67,8 +87,23 @@ function LogExpenseForm({ budget, onLogged }) {
               {c.name}
             </option>
           ))}
+          <option value={OTHER_CATEGORY}>Other</option>
         </select>
       </div>
+      {isOther && (
+        <div className="flex-1 min-w-[140px]">
+          <label htmlFor="expense-other-name" className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">
+            What was it for?
+          </label>
+          <input
+            id="expense-other-name"
+            value={customCategoryName}
+            onChange={(e) => setCustomCategoryName(e.target.value)}
+            placeholder="e.g. Textbooks"
+            className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 focus:border-brand-500 focus:bg-white focus:outline-none dark:border-navy-700 dark:bg-navy-800 dark:text-white"
+          />
+        </div>
+      )}
       <div className="w-28">
         <label htmlFor="expense-amount" className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">
           Amount (R)

@@ -18,10 +18,17 @@ const MONTH_NAMES = Array.from({ length: 12 }, (_, i) =>
   new Date(2000, i, 1).toLocaleString("en-ZA", { month: "short" })
 );
 
+// Same two colours as the monthly Allocated/Spent chart below, reused here
+// for the category breakdown so the meaning of "blue = allocated, green =
+// spent" stays consistent across both charts on this page.
+const ALLOCATED_COLOR = "#2f7bf6";
+const SPENT_COLOR = "#10b981";
+
 export default function History() {
   const { theme } = useTheme();
   const [budgets, setBudgets] = useState(null);
   const [error, setError] = useState("");
+  const [selectedBudgetId, setSelectedBudgetId] = useState("");
 
   useEffect(() => {
     api
@@ -65,14 +72,14 @@ export default function History() {
       {
         label: "Allocated",
         data: budgets.map((b) => Number(b.total_allocated)),
-        backgroundColor: "#2f7bf6",
+        backgroundColor: ALLOCATED_COLOR,
         borderRadius: 6,
         maxBarThickness: 36,
       },
       {
         label: "Spent",
         data: budgets.map((b) => Number(b.total_spent)),
-        backgroundColor: "#10b981",
+        backgroundColor: SPENT_COLOR,
         borderRadius: 6,
         maxBarThickness: 36,
       },
@@ -98,6 +105,58 @@ export default function History() {
     },
   };
 
+  // Category breakdown: defaults to the most recent month (budgets is
+  // chronological ascending, see the reverse() above) until the student
+  // picks a different one from the dropdown.
+  const selectedBudget =
+    budgets.find((b) => b.budget_id === selectedBudgetId) ?? budgets[budgets.length - 1];
+  const categories = selectedBudget.categories;
+
+  const categoryLabels = categories.map((c) => c.name);
+  const categoryData = {
+    labels: categoryLabels,
+    datasets: [
+      {
+        label: "Allocated",
+        data: categories.map((c) => Number(c.allocated_amount)),
+        backgroundColor: ALLOCATED_COLOR,
+        borderRadius: 4,
+        maxBarThickness: 20,
+      },
+      {
+        label: "Spent",
+        data: categories.map((c) => Number(c.spent_amount)),
+        backgroundColor: SPENT_COLOR,
+        borderRadius: 4,
+        maxBarThickness: 20,
+      },
+    ],
+  };
+
+  // Horizontal bars (indexAxis: "y") read category names left-aligned
+  // instead of rotated/truncated under vertical bars — the same reason
+  // choosing-a-form favours a horizontal layout for part-to-whole data
+  // with more than a couple of named categories.
+  const categoryOptions = {
+    indexAxis: "y",
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { labels: { color: tickColor } },
+      tooltip: {
+        callbacks: { label: (ctx) => `${ctx.dataset.label}: R${ctx.parsed.x.toFixed(2)}` },
+      },
+    },
+    scales: {
+      x: {
+        beginAtZero: true,
+        grid: { color: gridColor },
+        ticks: { color: tickColor, callback: (v) => `R${v}` },
+      },
+      y: { grid: { display: false }, ticks: { color: tickColor } },
+    },
+  };
+
   return (
     <div>
       <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Spending history</h1>
@@ -109,6 +168,47 @@ export default function History() {
         <div style={{ height: 320 }}>
           <Bar data={data} options={options} />
         </div>
+      </div>
+
+      <div className="mt-6 rounded-2xl bg-white p-6 shadow-card dark:bg-navy-900">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-semibold text-slate-900 dark:text-white">Category breakdown</h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Allocated vs. spent within one month.
+            </p>
+          </div>
+          <select
+            value={selectedBudget.budget_id}
+            onChange={(e) => setSelectedBudgetId(e.target.value)}
+            className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 focus:border-brand-500 focus:bg-white focus:outline-none dark:border-navy-700 dark:bg-navy-800 dark:text-white"
+          >
+            {budgets
+              .slice()
+              .reverse()
+              .map((b) => (
+                <option key={b.budget_id} value={b.budget_id}>
+                  {MONTH_NAMES[b.month - 1]} {b.year}
+                </option>
+              ))}
+          </select>
+        </div>
+
+        <div className="mt-4" style={{ height: Math.max(180, categories.length * 56) }}>
+          <Bar data={categoryData} options={categoryOptions} />
+        </div>
+
+        {categories.some((c) => Number(c.spent_amount) > Number(c.allocated_amount)) && (
+          <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 border-t border-slate-100 pt-4 text-xs dark:border-navy-800">
+            {categories
+              .filter((c) => Number(c.spent_amount) > Number(c.allocated_amount))
+              .map((c) => (
+                <span key={c.category_id} className="font-medium text-red-600 dark:text-red-400">
+                  {c.name} is R{(Number(c.spent_amount) - Number(c.allocated_amount)).toFixed(2)} over
+                </span>
+              ))}
+          </div>
+        )}
       </div>
 
       <div className="mt-6 overflow-x-auto rounded-2xl bg-white shadow-card dark:bg-navy-900">

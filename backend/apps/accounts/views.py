@@ -37,15 +37,17 @@ from .serializers import (
     ChangePasswordSerializer,
     LoginSerializer,
     MFAChallengeSerializer,
+    MFAResetSerializer,
     MFASetupConfirmSerializer,
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
     RegisterSerializer,
+    ResendVerificationSerializer,
     StudentProfileSerializer,
     VerifyEmailSerializer,
 )
 from .tokens import issue_login_challenge, issue_setup_challenge, read_login_challenge, read_setup_challenge
-from .utils import generate_mfa_secret, provisioning_uri, verify_totp_code
+from .utils import generate_mfa_secret, new_verification_token, provisioning_uri, verify_totp_code
 
 
 def _issue_jwt_pair(user):
@@ -69,6 +71,7 @@ class RegisterView(APIView):
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
+        log_action("POPIA_CONSENT_GIVEN", actor=user, target=user, metadata={"policy_version": "1.0"})
 
         if settings.SKIP_AUTH_VERIFICATION_FOR_TESTING:
             # Local-testing-only escape hatch — see LoginView below and
@@ -109,6 +112,39 @@ class VerifyEmailView(APIView):
         user.save(update_fields=["email_verified", "status", "updated_at"])
         log_action("EMAIL_VERIFIED", actor=user, target=user)
         return Response({"detail": "Email verified. You can now log in."})
+
+
+class ResendVerificationView(APIView):
+    """Same generic-response shape as PasswordResetRequestView below, and for
+    the same reason: a distinguishable response would let an attacker
+    enumerate registered DUT email addresses. Rotates the token rather than
+    resending the old one, so an old copy of the email stops working once a
+    new one is requested.
+    """
+
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth"
+
+    def post(self, request):
+        serializer = ResendVerificationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data["email"].lower().strip()
+
+        user = User.objects.filter(email=email, email_verified=False).first()
+        if user is not None:
+            user.email_verification_token = new_verification_token()
+            user.save(update_fields=["email_verification_token", "updated_at"])
+            verify_url = f"{settings.FRONTEND_BASE_URL}/verify-email?token={user.email_verification_token}"
+            send_mail(
+                subject="Verify your SmartSpend account",
+                message=f"Welcome to SmartSpend. Verify your account: {verify_url}",
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+            )
+            log_action("EMAIL_VERIFICATION_RESENT", actor=user, target=user)
+
+        return Response({"detail": "If that email is registered and not yet verified, a new link has been sent."})
 
 
 class LoginView(APIView):
@@ -209,6 +245,31 @@ class MFAVerifyView(APIView):
         return Response(_issue_jwt_pair(user))
 
 
+class MFAResetView(APIView):
+    """Lets a student who lost their authenticator device re-enrol, without
+    ever making MFA optional: clearing mfa_enabled here just means the next
+    LoginView call issues a fresh mfa_setup_required challenge (same as a
+    brand-new account), rather than a permanent opt-out. Proof of the
+    current password stands in for proof of the lost device.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth"
+
+    def post(self, request):
+        serializer = MFAResetSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+
+        request.user.mfa_secret = ""
+        request.user.mfa_enabled = False
+        request.user.save(update_fields=["mfa_secret", "mfa_enabled", "updated_at"])
+        log_action("MFA_RESET", actor=request.user, target=request.user)
+        return Response(
+            {"detail": "Two-factor authentication reset. You'll set it up again next time you log in."}
+        )
+
+
 class LogoutView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -235,6 +296,7 @@ class MeView(APIView):
                 "email": user.email,
                 "role": user.role,
                 "status": user.status,
+                "mfa_enabled": user.mfa_enabled,
                 "profile": StudentProfileSerializer(profile).data if profile else None,
             }
         )

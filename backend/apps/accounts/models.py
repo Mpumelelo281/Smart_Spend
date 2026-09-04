@@ -53,6 +53,13 @@ class User(AbstractBaseUser, PermissionsMixin):
     email_verified = models.BooleanField(default=False)
     email_verification_token = models.UUIDField(default=uuid.uuid4, editable=False)
 
+    # --- POPIA: consent must exist before personal information is
+    # collected, not bolted on afterward, so this is set at registration
+    # time (RegisterSerializer), not post-verification. Null means never
+    # given, which should never happen for a row created after this field
+    # existed — RegisterSerializer rejects registration without it.
+    popia_consent_at = models.DateTimeField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

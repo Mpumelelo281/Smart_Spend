@@ -187,7 +187,7 @@ export default function BudgetSetup() {
           </div>
 
           {formError && (
-            <p role="alert" className="mt-4 text-sm font-medium text-red-600">
+            <p role="alert" className="mt-4 text-sm font-medium text-red-600 dark:text-red-400">
               {formError}
             </p>
           )}
