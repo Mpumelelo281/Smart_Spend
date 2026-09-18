@@ -14,8 +14,6 @@ def test_placeholder_key_is_allowed_locally_with_debug_on():
 
 
 def test_a_real_key_is_accepted_in_production():
-    key = "x" * .  m,l]
-    
+    key = "x" * 64
 
     assert require_real_secret_key(key, debug=False) == key
-
