@@ -11,6 +11,8 @@ from pathlib import Path
 
 import environ
 
+from smartspend.secret_key import INSECURE_DEFAULT, require_real_secret_key
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 env = environ.Env(
@@ -18,8 +20,10 @@ env = environ.Env(
 )
 environ.Env.read_env(BASE_DIR / ".env")
 
-SECRET_KEY = env("DJANGO_SECRET_KEY", default="insecure-dev-key-change-me")
 DEBUG = env("DEBUG")
+# The placeholder default lets a fresh local checkout boot with no config,
+# but a deployed instance (DEBUG off) must never run on it — see secret_key.py.
+SECRET_KEY = require_real_secret_key(env("DJANGO_SECRET_KEY", default=INSECURE_DEFAULT), DEBUG)
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 
 # ---------------------------------------------------------------------------
