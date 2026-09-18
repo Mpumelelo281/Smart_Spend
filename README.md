@@ -74,6 +74,81 @@ once a worker is running:
 - `reporting.refresh_reporting_views` (e.g. every 15 minutes) — refreshes
   the materialised views Student Services reports read from (see below).
 
+## Deploying to Render
+
+`render.yaml` at the repo root is a Render Blueprint that defines the whole
+stack — Django API, Celery worker, React static site, Postgres and Redis.
+On Render's **Hobby** workspace plan (no monthly fee; you only pay for
+usage), the cost breaks down as:
+
+| Service | Instance type | Cost |
+|---|---|---|
+| `smartspend-api` (Django) | Free — spins down after 15 min idle, ~30–60s cold start | $0 |
+| `smartspend-frontend` (React) | Static site | $0 |
+| `smartspend-redis` (Key Value) | Free — in-memory only, wiped on restart (fine: it's only the Celery broker and a price-query cache) | $0 |
+| `smartspend-db` (Postgres) | Free — **expires 30 days after creation** (see below) | $0 |
+| `smartspend-worker` (Celery worker + beat) | Starter — Background Workers have no free tier | ~$7/mo |
+
+Worker and beat run together in one service (`celery ... worker -B`) so
+this is one paid instance, not two.
+
+**The free Postgres expires after 30 days.** That's a Render limit, not
+something this repo controls. Before it does, either upgrade the database
+to a paid plan in the Render dashboard, or move to an external free
+Postgres (e.g. Neon) and update `DATABASE_URL`/`REPORTING_DATABASE_URL` on
+both `smartspend-api` and `smartspend-worker`.
+
+### One-time setup
+
+1. Push this repo to GitHub (Render deploys from a connected repo).
+2. In the Render dashboard: **New → Blueprint**, pick this repo. Render
+   reads `render.yaml` and prompts for each secret marked `sync: false`.
+3. When prompted, fill in:
+   - `DJANGO_SECRET_KEY` — generate one with
+     `python -c "import secrets; print(secrets.token_urlsafe(50))"` and
+     paste the **same value** into both `smartspend-api` and
+     `smartspend-worker`.
+   - `SERPAPI_KEY` — optional; blank still works (search just uses
+     seeded data).
+   - `EMAIL_HOST_USER` / `EMAIL_HOST_PASSWORD` / `DEFAULT_FROM_EMAIL` —
+     required for verification and password-reset emails; without SMTP
+     configured, nobody can complete registration. See the Gmail
+     app-password note in `backend/.env.example`.
+   - `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` — optional; only needed for
+     Web Push. Generate with `vapid --gen`.
+4. After the first deploy finishes, **check the real URLs** Render
+   assigned (Dashboard → each service). If a service name was already
+   taken globally, Render appends a random suffix — in which case update
+   `CORS_ALLOWED_ORIGINS` and `FRONTEND_BASE_URL` on `smartspend-api`, and
+   `VITE_API_BASE_URL` on `smartspend-frontend`, to the real URLs, then
+   redeploy both.
+5. Add the single-page-app rewrite by hand: Dashboard →
+   `smartspend-frontend` → **Redirects/Rewrites** → add a rule with
+   Source `/*`, Destination `/index.html`, Action **Rewrite**. Without it,
+   refreshing any page other than `/` — and, critically, the link in the
+   verification email (`/verify-email?token=...`) — returns a 404. (This
+   isn't in `render.yaml` on purpose; see the comment there.)
+6. Apply the reporting SQL once, from the Render Postgres service's
+   **Connect** tab (it gives you a ready `psql` command):
+   ```
+   \i infra/sql/001_init_roles.sql
+   \i infra/sql/002_reporting_views.sql
+   ```
+   Until then `REPORTING_DATABASE_URL` reuses the main connection (see the
+   comment in `render.yaml`), and Student Services reports won't return
+   data — nothing else is affected.
+7. Register a Celery beat schedule for `catalog.check_price_drops` and
+   `reporting.refresh_reporting_views` via the Django admin (see
+   "Scheduled tasks" above).
+
+Render has no South Africa region (its regions are Oregon, Ohio,
+Virginia, Frankfurt and Singapore). `render.yaml` pins everything to
+Frankfurt, the closest to South Africa — and all services must share one
+region anyway, since Render's private network (which Redis is restricted
+to) doesn't span regions. That's fine for a demo, but worth flagging if
+this ever handles real students' data: POPIA cross-border transfer rules
+would apply.
+
 ## Sprint 1 — what's implemented
 
 Authentication and budget creation, per the build order:

@@ -57,6 +57,11 @@ AUTH_USER_MODEL = "accounts.User"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # Serves STATIC_ROOT directly from the app process — the admin's own
+    # CSS/JS, mainly. No CDN/object storage needed for a project this
+    # size; whitenoise is the standard, zero-extra-infra way to do this
+    # on a single-dyno-style host like Render.
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -273,6 +278,12 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    # Content-hashed filenames + gzip/brotli precompression, served
+    # straight out of collectstatic's output by WhiteNoiseMiddleware above.
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
+}
 
 # ---------------------------------------------------------------------------
 # Outbound email — DUT email verification links, budget-threshold alerts.

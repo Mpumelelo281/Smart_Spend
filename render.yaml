@@ -1,0 +1,189 @@
+# Render Blueprint — deploys the whole stack from one repo connection.
+# See README.md's "Deploying to Render" section for the one-time manual
+# steps this file can't do for you (applying infra/sql/, filling in
+# secret env vars, generating a VAPID keypair).
+#
+# Cost on the Hobby workspace plan: everything below is on Render's free
+# instance type except `smartspend-worker` — Background Workers have no
+# free tier on Render, so that one service is the only recurring cost
+# (~$7/mo on the cheapest paid instance type). It runs Celery worker AND
+# beat together (the `-B` flag) in one process specifically to avoid
+# paying for two worker services instead of one — fine at this app's
+# scale, not how you'd run Celery at real production scale.
+
+# Every non-static service is pinned to the same region on purpose: Render
+# only lets services in one region reach each other over the private
+# network, and smartspend-redis below is private-only, so a region
+# mismatch wouldn't degrade — it would just fail to connect. Frankfurt is
+# the closest Render region to South Africa (there is no SA region).
+
+# Python is pinned to 3.12 via .python-version (repo root AND backend/, since
+# it's unclear which one Render reads when `rootDir` is set) to match CI and
+# the Dockerfile — Render's default for new services is 3.14, and several
+# pinned dependencies (pandas, scikit-learn, Pillow) may not have wheels
+# for it yet.
+
+databases:
+  - name: smartspend-db
+    plan: free
+    region: frankfurt
+    databaseName: smartspend
+    user: smartspend
+
+services:
+  - name: smartspend-redis
+    type: keyvalue
+    plan: free
+    region: frankfurt
+    # Empty allow list = no public internet access — smartspend-api and
+    # smartspend-worker still reach it over Render's private network
+    # regardless, since this only governs the public connection string.
+    ipAllowList: []
+
+  - name: smartspend-api
+    type: web
+    runtime: python
+    plan: free
+    region: frankfurt
+    rootDir: backend
+    buildCommand: "pip install -r requirements.txt && python manage.py collectstatic --noinput"
+    preDeployCommand: "python manage.py migrate"
+    startCommand: "gunicorn smartspend.wsgi:application --bind 0.0.0.0:$PORT --workers 3"
+    envVars:
+      # Set the SAME value on both smartspend-api and smartspend-worker —
+      # see README ("one Django app, two processes" — session/token
+      # signing must use one shared key, so this is deliberately not
+      # generateValue, which would give each service its own).
+      - key: DJANGO_SECRET_KEY
+        sync: false
+      - key: DEBUG
+        value: "False"
+      - key: DJANGO_ALLOWED_HOSTS
+        value: ".onrender.com"
+      - key: SECURE_SSL_REDIRECT
+        value: "True"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: smartspend-db
+          property: connectionString
+      # No separate restricted role provisioned yet (see README) — points
+      # at the same connection as DATABASE_URL until infra/sql/001_init_roles.sql
+      # has been applied by hand, same fallback apps/reporting relies on locally.
+      - key: REPORTING_DATABASE_URL
+        fromDatabase:
+          name: smartspend-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: smartspend-redis
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: smartspend-redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: keyvalue
+          name: smartspend-redis
+          property: connectionString
+      - key: PRICE_CACHE_URL
+        fromService:
+          type: keyvalue
+          name: smartspend-redis
+          property: connectionString
+      - key: FRONTEND_BASE_URL
+        value: "https://smartspend-frontend.onrender.com"
+      - key: CORS_ALLOWED_ORIGINS
+        value: "https://smartspend-frontend.onrender.com"
+      # Secrets — never committed. Render prompts for each of these once,
+      # when the Blueprint is first connected. See README for where each
+      # one comes from.
+      - key: SERPAPI_KEY
+        sync: false
+      - key: EMAIL_HOST_USER
+        sync: false
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+      - key: DEFAULT_FROM_EMAIL
+        sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+
+  - name: smartspend-worker
+    type: worker
+    runtime: python
+    plan: starter
+    region: frankfurt
+    rootDir: backend
+    buildCommand: "pip install -r requirements.txt"
+    # --concurrency capped explicitly: Celery otherwise sizes its worker
+    # pool to the CPU count it sees, which on shared hosting can be much
+    # higher than a small Starter instance's memory can support.
+    startCommand: "celery -A smartspend worker -B -l info --concurrency=2 --scheduler django_celery_beat.schedulers:DatabaseScheduler"
+    envVars:
+      - key: DJANGO_SECRET_KEY
+        sync: false
+      - key: DEBUG
+        value: "False"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: smartspend-db
+          property: connectionString
+      - key: REPORTING_DATABASE_URL
+        fromDatabase:
+          name: smartspend-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: smartspend-redis
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: smartspend-redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: keyvalue
+          name: smartspend-redis
+          property: connectionString
+      - key: PRICE_CACHE_URL
+        fromService:
+          type: keyvalue
+          name: smartspend-redis
+          property: connectionString
+      - key: SERPAPI_KEY
+        sync: false
+      - key: EMAIL_HOST_USER
+        sync: false
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+      - key: DEFAULT_FROM_EMAIL
+        sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+
+  # NOTE: this static site needs a catch-all rewrite (/* -> /index.html)
+  # or deep links like /verify-email?token=... 404 on refresh. It is
+  # deliberately NOT declared here as a `routes:` block: Render documents
+  # that key for static sites, but its server-side Blueprint validator has
+  # been reported to reject it ("services[n].routes is not allowed"),
+  # which fails the entire Blueprint, not just this service. Add it once
+  # by hand instead — README, "One-time setup" step 5. Dashboard-defined
+  # rules persist across deploys.
+  - name: smartspend-frontend
+    type: web
+    runtime: static
+    rootDir: frontend
+    buildCommand: "npm install && npm run build"
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: "https://smartspend-api.onrender.com/api/v1"
