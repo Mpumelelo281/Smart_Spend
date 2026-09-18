@@ -112,16 +112,16 @@ both `smartspend-api` and `smartspend-worker`.
      seeded data).
    - `EMAIL_HOST_USER` / `EMAIL_HOST_PASSWORD` / `DEFAULT_FROM_EMAIL` —
      required for verification and password-reset emails; without them,
-     nobody can complete registration. **Not Gmail here:** Render blocks
-     outbound SMTP ports 25/465/587 on free web services, so Gmail SMTP
-     can't work from `smartspend-api`. `render.yaml` uses
-     [SMTP2GO](https://www.smtp2go.com) on port 2525 instead (free tier:
-     1,000 emails/month, 200/day; still plain SMTP, so no code change).
-     Create a free account, then: **Sending → SMTP Users** gives the
-     `EMAIL_HOST_USER` / `EMAIL_HOST_PASSWORD` pair, and **Sending →
-     Verified Senders** is where you verify the address you'll use as
-     `DEFAULT_FROM_EMAIL`. Locally you can keep using Gmail (see
-     `backend/.env.example`) — the block only applies on Render.
+     nobody can complete registration. Use your Gmail address, its
+     16-character **App Password** (not your normal password), and the
+     same Gmail address for `DEFAULT_FROM_EMAIL` — the same values as
+     your local `backend/.env`. Enter them on **both** `smartspend-api`
+     and `smartspend-worker`. Note that on Render the *worker* is what
+     actually sends: Render blocks outbound SMTP ports 25/465/587 on free
+     web services, so `smartspend-api` can't reach Gmail, but the worker
+     (a paid instance) can. Emails are queued by the API and sent by the
+     worker (`apps/accounts/tasks.py`) — which means **registration emails
+     only arrive while the worker is running**.
    - `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` — optional; only needed for
      Web Push. Generate with `vapid --gen`.
 4. After the first deploy finishes, **check the real URLs** Render

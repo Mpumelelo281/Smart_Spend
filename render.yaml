@@ -110,15 +110,17 @@ services:
       # Non-secret half of the SMTP config (the credentials below are the
       # secret half). Without these, Django defaults to the console email
       # backend and verification emails are only ever printed to the logs.
-      # SMTP2GO on port 2525, not Gmail on 587: Render blocks outbound
-      # ports 25/465/587 on free web services, but not 2525. Still plain
-      # SMTP + STARTTLS, so Django's stock SMTP backend works unchanged.
+      # Gmail SMTP (587). Render blocks outbound ports 25/465/587 on FREE
+      # web services, so smartspend-api itself can't reach Gmail — email is
+      # queued and sent by smartspend-worker instead (a paid instance, so
+      # unrestricted). See apps/accounts/tasks.py. The API carries the same
+      # settings only for its send-inline fallback if the queue is down.
       - key: EMAIL_BACKEND
         value: "django.core.mail.backends.smtp.EmailBackend"
       - key: EMAIL_HOST
-        value: "mail.smtp2go.com"
+        value: "smtp.gmail.com"
       - key: EMAIL_PORT
-        value: "2525"
+        value: "587"
       - key: EMAIL_USE_TLS
         value: "True"
       - key: EMAIL_HOST_USER
@@ -181,15 +183,17 @@ services:
       # Non-secret half of the SMTP config (the credentials below are the
       # secret half). Without these, Django defaults to the console email
       # backend and verification emails are only ever printed to the logs.
-      # SMTP2GO on port 2525, not Gmail on 587: Render blocks outbound
-      # ports 25/465/587 on free web services, but not 2525. Still plain
-      # SMTP + STARTTLS, so Django's stock SMTP backend works unchanged.
+      # Gmail SMTP (587). Render blocks outbound ports 25/465/587 on FREE
+      # web services, so smartspend-api itself can't reach Gmail — email is
+      # queued and sent by smartspend-worker instead (a paid instance, so
+      # unrestricted). See apps/accounts/tasks.py. The API carries the same
+      # settings only for its send-inline fallback if the queue is down.
       - key: EMAIL_BACKEND
         value: "django.core.mail.backends.smtp.EmailBackend"
       - key: EMAIL_HOST
-        value: "mail.smtp2go.com"
+        value: "smtp.gmail.com"
       - key: EMAIL_PORT
-        value: "2525"
+        value: "587"
       - key: EMAIL_USE_TLS
         value: "True"
       - key: EMAIL_HOST_USER

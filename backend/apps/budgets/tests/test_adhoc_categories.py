@@ -77,7 +77,9 @@ def test_adhoc_category_rejects_blank_name(authenticated_client):
 def test_adhoc_category_rejects_another_students_budget(authenticated_client, django_user_model):
     from apps.accounts.models import StudentProfile
 
-    other_user = django_user_model.objects.create_user(email="other@dut4life.ac.za", password="Correct-Horse-9!")
+    other_user = django_user_model.objects.create_user(
+        email="other@dut4life.ac.za", password="Correct-Horse-9!"
+    )
     other_user.email_verified = True
     other_user.status = django_user_model.Status.ACTIVE
     other_user.save()

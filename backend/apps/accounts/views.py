@@ -19,7 +19,6 @@ from io import BytesIO
 
 import qrcode
 from django.contrib.auth.tokens import default_token_generator
-from django.core.mail import send_mail
 from django.conf import settings
 from django.core import signing
 from django.shortcuts import get_object_or_404
@@ -46,6 +45,7 @@ from .serializers import (
     StudentProfileSerializer,
     VerifyEmailSerializer,
 )
+from .tasks import send_email
 from .tokens import issue_login_challenge, issue_setup_challenge, read_login_challenge, read_setup_challenge
 from .utils import generate_mfa_secret, new_verification_token, provisioning_uri, verify_totp_code
 
@@ -86,11 +86,10 @@ class RegisterView(APIView):
             )
 
         verify_url = f"{settings.FRONTEND_BASE_URL}/verify-email?token={user.email_verification_token}"
-        send_mail(
-            subject="Verify your SmartSpend account",
-            message=f"Welcome to SmartSpend. Verify your account: {verify_url}",
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[user.email],
+        send_email(
+            "Verify your SmartSpend account",
+            f"Welcome to SmartSpend. Verify your account: {verify_url}",
+            user.email,
         )
         log_action("USER_REGISTERED", actor=user, target=user, metadata={"email": user.email})
         return Response(
@@ -136,15 +135,16 @@ class ResendVerificationView(APIView):
             user.email_verification_token = new_verification_token()
             user.save(update_fields=["email_verification_token", "updated_at"])
             verify_url = f"{settings.FRONTEND_BASE_URL}/verify-email?token={user.email_verification_token}"
-            send_mail(
-                subject="Verify your SmartSpend account",
-                message=f"Welcome to SmartSpend. Verify your account: {verify_url}",
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[user.email],
+            send_email(
+                "Verify your SmartSpend account",
+                f"Welcome to SmartSpend. Verify your account: {verify_url}",
+                user.email,
             )
             log_action("EMAIL_VERIFICATION_RESENT", actor=user, target=user)
 
-        return Response({"detail": "If that email is registered and not yet verified, a new link has been sent."})
+        return Response(
+            {"detail": "If that email is registered and not yet verified, a new link has been sent."}
+        )
 
 
 class LoginView(APIView):
@@ -353,11 +353,10 @@ class PasswordResetRequestView(APIView):
             uid = urlsafe_base64_encode(force_bytes(user.pk))
             token = default_token_generator.make_token(user)
             reset_url = f"{settings.FRONTEND_BASE_URL}/reset-password?uid={uid}&token={token}"
-            send_mail(
-                subject="Reset your SmartSpend password",
-                message=f"Reset your password: {reset_url}\n\nIf you didn't request this, ignore this email.",
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[user.email],
+            send_email(
+                "Reset your SmartSpend password",
+                f"Reset your password: {reset_url}\n\nIf you didn't request this, ignore this email.",
+                user.email,
             )
             log_action("PASSWORD_RESET_REQUESTED", actor=user, target=user)
 
