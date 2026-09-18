@@ -40,6 +40,12 @@ services:
     # regardless, since this only governs the public connection string.
     ipAllowList: []
 
+  # The URLs below are this account's real, Render-assigned addresses.
+  # Render appends a random suffix when a service name is already taken
+  # globally (both plain names were), so the un-suffixed
+  # smartspend-api/smartspend-frontend addresses belong to strangers —
+  # never point these at them: FRONTEND_BASE_URL ends up inside
+  # verification emails.
   - name: smartspend-api
     type: web
     runtime: python
@@ -99,9 +105,9 @@ services:
           name: smartspend-redis
           property: connectionString
       - key: FRONTEND_BASE_URL
-        value: "https://smartspend-frontend.onrender.com"
+        value: "https://smartspend-frontend-26wn.onrender.com"
       - key: CORS_ALLOWED_ORIGINS
-        value: "https://smartspend-frontend.onrender.com"
+        value: "https://smartspend-frontend-26wn.onrender.com"
       # Secrets — never committed. Render prompts for each of these once,
       # when the Blueprint is first connected. See README for where each
       # one comes from.
@@ -223,4 +229,4 @@ services:
     staticPublishPath: dist
     envVars:
       - key: VITE_API_BASE_URL
-        value: "https://smartspend-api.onrender.com/api/v1"
+        value: "https://smartspend-api-waxg.onrender.com/api/v1"
