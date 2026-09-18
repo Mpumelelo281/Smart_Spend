@@ -47,8 +47,13 @@ services:
     region: frankfurt
     rootDir: backend
     buildCommand: "pip install -r requirements.txt && python manage.py collectstatic --noinput"
-    preDeployCommand: "python manage.py migrate"
-    startCommand: "gunicorn smartspend.wsgi:application --bind 0.0.0.0:$PORT --workers 3"
+    # Migrations run at start, not via `preDeployCommand`: Render rejects
+    # preDeployCommand on free instances ("pre-deploy command is not
+    # supported for free tier services"). Not in buildCommand either — the
+    # private database URL isn't reachable during the build step. `migrate`
+    # is idempotent, so re-running it on every start (including each wake
+    # from free-tier spin-down) just costs a couple of seconds.
+    startCommand: "python manage.py migrate --noinput && gunicorn smartspend.wsgi:application --bind 0.0.0.0:$PORT --workers 3"
     envVars:
       # Set the SAME value on both smartspend-api and smartspend-worker —
       # see README ("one Django app, two processes" — session/token
@@ -102,6 +107,20 @@ services:
       # one comes from.
       - key: SERPAPI_KEY
         sync: false
+      # Non-secret half of the SMTP config (the credentials below are the
+      # secret half). Without these, Django defaults to the console email
+      # backend and verification emails are only ever printed to the logs.
+      # SMTP2GO on port 2525, not Gmail on 587: Render blocks outbound
+      # ports 25/465/587 on free web services, but not 2525. Still plain
+      # SMTP + STARTTLS, so Django's stock SMTP backend works unchanged.
+      - key: EMAIL_BACKEND
+        value: "django.core.mail.backends.smtp.EmailBackend"
+      - key: EMAIL_HOST
+        value: "mail.smtp2go.com"
+      - key: EMAIL_PORT
+        value: "2525"
+      - key: EMAIL_USE_TLS
+        value: "True"
       - key: EMAIL_HOST_USER
         sync: false
       - key: EMAIL_HOST_PASSWORD
@@ -159,6 +178,20 @@ services:
           property: connectionString
       - key: SERPAPI_KEY
         sync: false
+      # Non-secret half of the SMTP config (the credentials below are the
+      # secret half). Without these, Django defaults to the console email
+      # backend and verification emails are only ever printed to the logs.
+      # SMTP2GO on port 2525, not Gmail on 587: Render blocks outbound
+      # ports 25/465/587 on free web services, but not 2525. Still plain
+      # SMTP + STARTTLS, so Django's stock SMTP backend works unchanged.
+      - key: EMAIL_BACKEND
+        value: "django.core.mail.backends.smtp.EmailBackend"
+      - key: EMAIL_HOST
+        value: "mail.smtp2go.com"
+      - key: EMAIL_PORT
+        value: "2525"
+      - key: EMAIL_USE_TLS
+        value: "True"
       - key: EMAIL_HOST_USER
         sync: false
       - key: EMAIL_HOST_PASSWORD

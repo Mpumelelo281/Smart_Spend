@@ -111,9 +111,17 @@ both `smartspend-api` and `smartspend-worker`.
    - `SERPAPI_KEY` — optional; blank still works (search just uses
      seeded data).
    - `EMAIL_HOST_USER` / `EMAIL_HOST_PASSWORD` / `DEFAULT_FROM_EMAIL` —
-     required for verification and password-reset emails; without SMTP
-     configured, nobody can complete registration. See the Gmail
-     app-password note in `backend/.env.example`.
+     required for verification and password-reset emails; without them,
+     nobody can complete registration. **Not Gmail here:** Render blocks
+     outbound SMTP ports 25/465/587 on free web services, so Gmail SMTP
+     can't work from `smartspend-api`. `render.yaml` uses
+     [SMTP2GO](https://www.smtp2go.com) on port 2525 instead (free tier:
+     1,000 emails/month, 200/day; still plain SMTP, so no code change).
+     Create a free account, then: **Sending → SMTP Users** gives the
+     `EMAIL_HOST_USER` / `EMAIL_HOST_PASSWORD` pair, and **Sending →
+     Verified Senders** is where you verify the address you'll use as
+     `DEFAULT_FROM_EMAIL`. Locally you can keep using Gmail (see
+     `backend/.env.example`) — the block only applies on Render.
    - `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` — optional; only needed for
      Web Push. Generate with `vapid --gen`.
 4. After the first deploy finishes, **check the real URLs** Render
