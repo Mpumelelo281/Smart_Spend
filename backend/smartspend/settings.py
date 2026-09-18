@@ -48,6 +48,7 @@ LOCAL_APPS = [
     "apps.catalog",
     "apps.recommendations",
     "apps.notifications",
+    "apps.reporting",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -178,6 +179,12 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "Africa/Johannesburg"
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
+# Local-testing-only escape hatch (parallel to CACHE_BACKEND=locmem above):
+# runs every Celery task inline, synchronously, with no broker at all.
+# Never set outside a developer's own machine or the test suite (see
+# conftest.py) — real dev/docker/production always run an actual worker.
+CELERY_TASK_ALWAYS_EAGER = env.bool("CELERY_TASK_ALWAYS_EAGER", default=False)
+CELERY_TASK_EAGER_PROPAGATES = CELERY_TASK_ALWAYS_EAGER
 
 _CACHE_BACKEND = env("CACHE_BACKEND", default="redis")
 if _CACHE_BACKEND == "locmem":
@@ -228,6 +235,29 @@ SKIP_AUTH_VERIFICATION_FOR_TESTING = env.bool("SKIP_AUTH_VERIFICATION_FOR_TESTIN
 SERPAPI_KEY = env("SERPAPI_KEY", default="")
 SERPAPI_GOOGLE_DOMAIN = env("SERPAPI_GOOGLE_DOMAIN", default="google.co.za")
 SERPAPI_COUNTRY = env("SERPAPI_COUNTRY", default="za")
+
+# apps/catalog/adapters/{checkers,shoprite,mr_price}.py — each stays inert
+# (is_configured() False, silently skipped by live_search.py) until its
+# base URL is set. Blank by default, same as SERPAPI_KEY: see each
+# adapter's docstring on verifying the endpoint before ever configuring
+# these in a deployed environment.
+CHECKERS_API_BASE_URL = env("CHECKERS_API_BASE_URL", default="")
+CHECKERS_API_KEY = env("CHECKERS_API_KEY", default="")
+SHOPRITE_API_BASE_URL = env("SHOPRITE_API_BASE_URL", default="")
+SHOPRITE_API_KEY = env("SHOPRITE_API_KEY", default="")
+MR_PRICE_API_BASE_URL = env("MR_PRICE_API_BASE_URL", default="")
+MR_PRICE_API_KEY = env("MR_PRICE_API_KEY", default="")
+
+# Web Push (apps/notifications/push.py) — Notification.Channel.PUSH
+# delivery. Generate a keypair with `vapid --gen` (from the py-vapid
+# package, a pywebpush dependency) or `openssl ecparam -genkey -name
+# prime256v1`. Blank by default: send_web_push logs and returns instead of
+# sending when either key is missing, so the app still works with no VAPID
+# keys configured, just without push delivery (in-app/email notifications
+# are unaffected).
+VAPID_PUBLIC_KEY = env("VAPID_PUBLIC_KEY", default="")
+VAPID_PRIVATE_KEY = env("VAPID_PRIVATE_KEY", default="")
+VAPID_ADMIN_EMAIL = env("VAPID_ADMIN_EMAIL", default="no-reply@smartspend.dut4life.ac.za")
 
 AUTHENTICATION_BACKENDS = [
     "django.contrib.auth.backends.ModelBackend",

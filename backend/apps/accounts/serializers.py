@@ -18,12 +18,19 @@ class RegisterSerializer(serializers.Serializer):
     path that stores a profile without a recorded consent timestamp.
     """
 
+    full_name = serializers.CharField(max_length=150)
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True, min_length=10)
     campus = serializers.CharField(max_length=120)
     residence = serializers.CharField(max_length=120, required=False, allow_blank=True)
     disbursement_day = serializers.IntegerField(min_value=1, max_value=31, default=1)
     popia_consent = serializers.BooleanField(write_only=True)
+
+    def validate_full_name(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("Full name is required.")
+        return value
 
     def validate_email(self, value):
         value = value.lower().strip()
@@ -45,6 +52,7 @@ class RegisterSerializer(serializers.Serializer):
 
     def create(self, validated_data):
         password = validated_data.pop("password")
+        full_name = validated_data.pop("full_name")
         campus = validated_data.pop("campus")
         residence = validated_data.pop("residence", "")
         disbursement_day = validated_data.pop("disbursement_day", 1)
@@ -54,7 +62,11 @@ class RegisterSerializer(serializers.Serializer):
             email=validated_data["email"], password=password, popia_consent_at=timezone.now()
         )
         StudentProfile.objects.create(
-            user=user, campus=campus, residence=residence, disbursement_day=disbursement_day
+            user=user,
+            full_name=full_name,
+            campus=campus,
+            residence=residence,
+            disbursement_day=disbursement_day,
         )
         return user
 
@@ -96,6 +108,7 @@ class StudentProfileSerializer(serializers.ModelSerializer):
         model = StudentProfile
         fields = [
             "profile_id",
+            "full_name",
             "allowance_amount",
             "disbursement_day",
             "campus",

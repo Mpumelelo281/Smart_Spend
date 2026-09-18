@@ -1,13 +1,10 @@
 """Entity: Notification (1 of the 11).
 
 Rule 10 ("alert at 80% of a category allocation and again when exceeded")
-is now wired up — see apps/budgets/notifications.py, called synchronously
-from TransactionSerializer.create() rather than a Celery task, since this
-dev environment doesn't run a Celery worker; the check itself is cheap
-(one aggregate query), so this is a reasonable interim home for it.
-Moving the dispatch itself off the request/response cycle (Rule 10's
-"never delays the response") is the natural next step once Celery is
-actually running.
+is wired up via apps/budgets/notifications.py::check_category_threshold,
+dispatched from a Celery task (apps/budgets/tasks.py) so logging a
+transaction never waits on the alert check — Rule 10's "never delays the
+response".
 """
 
 import uuid
@@ -49,6 +46,16 @@ class Notification(models.Model):
         related_name="notifications",
     )
 
+    # PRICE_DROP alerts (apps/catalog/tasks.py::check_price_drops) — null
+    # for every other notif_type, same reasoning as related_category above.
+    related_product = models.ForeignKey(
+        "catalog.Product",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="notifications",
+    )
+
     class Meta:
         db_table = "notification"
         indexes = [models.Index(fields=["is_read"]), models.Index(fields=["created_at"])]
@@ -57,8 +64,44 @@ class Notification(models.Model):
                 fields=["related_category", "notif_type"],
                 name="one_threshold_notification_per_category_per_type",
                 condition=models.Q(related_category__isnull=False),
-            )
+            ),
+            # One *active* (unread) price-drop alert per student per
+            # product — once dismissed (is_read=True), the row drops out
+            # of this partial index and a later drop can alert again.
+            models.UniqueConstraint(
+                fields=["profile", "related_product", "notif_type"],
+                name="one_active_price_drop_notification_per_product",
+                condition=models.Q(related_product__isnull=False, is_read=False),
+            ),
         ]
 
     def __str__(self):
         return f"{self.notif_type} -> {self.profile_id}"
+
+
+class PushSubscription(models.Model):
+    """A browser's Web Push subscription (from the PushManager API),
+    registered once per device/browser the student opts in on. Channel.PUSH
+    notifications are delivered to every row here for that student — see
+    apps/notifications/push.py::send_web_push.
+    """
+
+    subscription_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    profile = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name="push_subscriptions")
+    # Push service endpoints (e.g. Chrome's FCM, Firefox's autopush) run
+    # well past Django's default URLField length.
+    endpoint = models.URLField(max_length=500)
+    p256dh = models.CharField(max_length=255)
+    auth = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "push_subscription"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["profile", "endpoint"], name="one_subscription_per_profile_per_endpoint"
+            )
+        ]
+
+    def __str__(self):
+        return f"push subscription for {self.profile_id}"

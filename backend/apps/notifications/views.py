@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.shortcuts import get_object_or_404
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
@@ -5,8 +6,8 @@ from rest_framework.views import APIView
 
 from apps.accounts.permissions import IsStudent
 
-from .models import Notification
-from .serializers import NotificationSerializer
+from .models import Notification, PushSubscription
+from .serializers import NotificationSerializer, PushSubscriptionSerializer
 
 
 class NotificationListView(generics.ListAPIView):
@@ -38,4 +39,48 @@ class MarkAllNotificationsReadView(APIView):
 
     def post(self, request):
         Notification.objects.filter(profile__user=request.user, is_read=False).update(is_read=True)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class VapidPublicKeyView(APIView):
+    """Lets the frontend fetch the public key it needs for
+    PushManager.subscribe() without hard-coding it into the bundle — so
+    rotating the VAPID keypair is a backend-only config change.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        return Response({"vapid_public_key": settings.VAPID_PUBLIC_KEY})
+
+
+class PushSubscriptionCreateView(generics.CreateAPIView):
+    permission_classes = [permissions.IsAuthenticated, IsStudent]
+    serializer_class = PushSubscriptionSerializer
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["profile"] = self.request.user.student_profile
+        return context
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        subscription = serializer.save()
+        return Response(PushSubscriptionSerializer(subscription).data, status=status.HTTP_201_CREATED)
+
+
+class PushSubscriptionDeleteView(APIView):
+    """Takes the endpoint in the body (DELETE requests from the browser's
+    PushManager naturally carry the subscription object, not an id this
+    API assigned) rather than a URL path segment.
+    """
+
+    permission_classes = [permissions.IsAuthenticated, IsStudent]
+
+    def post(self, request):
+        endpoint = request.data.get("endpoint")
+        if not endpoint:
+            return Response({"detail": "endpoint is required."}, status=status.HTTP_400_BAD_REQUEST)
+        PushSubscription.objects.filter(profile__user=request.user, endpoint=endpoint).delete()
         return Response(status=status.HTTP_204_NO_CONTENT)

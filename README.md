@@ -57,14 +57,31 @@ npm install
 npm run dev
 ```
 
+```bash
+cd frontend
+npm run test        # Vitest + React Testing Library, single run
+npm run test:watch  # same, in watch mode
+```
+
+### Scheduled (Celery beat) tasks
+
+Two periodic tasks exist but aren't scheduled by default — register them
+via the django-celery-beat admin (`/admin/django_celery_beat/periodictask/`)
+once a worker is running:
+
+- `catalog.check_price_drops` (e.g. hourly) — alerts students when a
+  product in their cart gets cheaper elsewhere.
+- `reporting.refresh_reporting_views` (e.g. every 15 minutes) — refreshes
+  the materialised views Student Services reports read from (see below).
+
 ## Sprint 1 — what's implemented
 
 Authentication and budget creation, per the build order:
 
 - All 11 ERD entities modelled and migrated (`apps/accounts`,
   `apps/budgets`, `apps/catalog`, `apps/recommendations`,
-  `apps/notifications`) — catalog/recommendations/notifications are
-  model-only until Sprints 2–3 add the business logic that uses them.
+  `apps/notifications`) — see "Sprints 2–3" below for the business logic
+  built on top of catalog/recommendations/notifications since.
 - Registration gated to a DUT email domain, with email verification.
 - Two-step TOTP MFA login (enrolment on first login, challenge on every
   login after) — see `apps/accounts/views.py`.
@@ -94,9 +111,42 @@ reading the code.
 - `AuditLog` is additional infrastructure, not one of the 11 ERD entities —
   Rule 8 requires it and it has to live somewhere.
 
-## Not yet built (Sprints 2–3)
+## Sprints 2–3 — what's since been added
 
-Retailer adapters + circuit breakers + 15-minute Redis price cache +
-search API (Sprint 2); the scikit-learn hybrid recommender, cold-start
-fallback, threshold-notification Celery task, spending dashboard, and
-Student Services k-anonymity reporting (Sprint 3).
+- Retailer adapters + circuit breakers + 15-minute Redis price cache +
+  search API (`apps/catalog`) — SerpApi Google Shopping is fully live;
+  Checkers/Shoprite/Mr Price (`apps/catalog/adapters/`) are wired into the
+  same adapter interface but stay inert until a verified search endpoint
+  is configured (`CHECKERS_API_BASE_URL` etc. — see each module's
+  docstring and `.env.example`).
+- A rule-based cold-start recommender (`apps/recommendations`) — ranks
+  cheapest-in-category listings when there's no training data yet; the
+  scikit-learn hybrid model that replaces/augments it is still future
+  work (`Recommendation.was_accepted` is already captured as its training
+  signal).
+- Threshold notifications dispatch via a Celery task
+  (`apps/budgets/tasks.py`) instead of inline in the request/response
+  cycle, plus Web Push delivery (`apps/notifications/push.py` — needs a
+  VAPID keypair, see `.env.example`) and a price-drop check
+  (`apps/catalog/tasks.py`).
+- Student Services k-anonymity reporting (`apps/reporting`, backed by
+  `infra/sql/002_reporting_views.sql`) — apply that SQL file against the
+  database once (it's not a Django migration, by design — see
+  `smartspend/db_router.py`) before the report endpoints return data.
+- Recurring budgets (clone last month's categories), an Excel (.xlsx)
+  export of budget history, and a pace-based spend forecast — all in
+  `apps/budgets/views.py`, surfaced on the Dashboard and History pages.
+  The export is a real spreadsheet (bold header, banded Excel Table,
+  currency-formatted columns via `openpyxl`), not CSV — CSV can't carry
+  any formatting at all, so "Export Excel" on the History page downloads
+  `smartspend-budget-history.xlsx` directly. Each row is one category's
+  own Allocated/Spent for that month, plus two Month Total columns
+  repeated across every row for that month, so "was that the whole
+  month's spend or just this category?" is answerable from the row
+  itself rather than ambiguous.
+- `TransactionSerializer.create()` falls back to running the threshold
+  check inline if enqueuing it onto Celery fails (e.g. no broker
+  reachable — the normal state of a non-Docker local dev setup with no
+  Redis/worker running). Without this, the 80%/exceeded alert silently
+  never fires at all in that setup, not just late — see the comment
+  there and `apps/budgets/tasks.py`.

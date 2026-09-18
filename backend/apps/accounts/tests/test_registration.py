@@ -8,6 +8,7 @@ pytestmark = pytest.mark.django_db
 
 def _register(api_client, **overrides):
     payload = {
+        "full_name": "Nomvula Khumalo",
         "email": "nomvula@dut4life.ac.za",
         "password": "Correct-Horse-9!",
         "campus": "ML Sultan",
@@ -26,9 +27,18 @@ def test_registration_creates_pending_user_and_profile(api_client):
     user = User.objects.get(email="nomvula@dut4life.ac.za")
     assert user.status == User.Status.PENDING_VERIFICATION
     assert user.email_verified is False
-    assert StudentProfile.objects.filter(user=user).exists()
+    profile = StudentProfile.objects.filter(user=user).first()
+    assert profile is not None
+    assert profile.full_name == "Nomvula Khumalo"
     assert len(mail.outbox) == 1
     assert str(user.email_verification_token) in mail.outbox[0].body
+
+
+def test_registration_rejects_missing_full_name(api_client):
+    response = _register(api_client, full_name="")
+
+    assert response.status_code == 400
+    assert not User.objects.filter(email="nomvula@dut4life.ac.za").exists()
 
 
 def test_registration_rejects_non_dut_email(api_client):

@@ -2,9 +2,11 @@
 exceeded. Alerts state the category, the percentage and the rand amount
 so they are actionable without opening the app."
 
-Called synchronously from TransactionSerializer.create() (see
-serializers.py) — see the note in apps/notifications/models.py on why this
-isn't a Celery task yet in this environment.
+The check itself (this module) stays a plain function — it's tasks.py's
+`dispatch_threshold_check` Celery task that calls it off the
+request/response cycle. Kept separate so the check can still be unit
+tested (or called from the admin/a management command) without pulling in
+Celery at all.
 """
 
 from decimal import Decimal
@@ -14,6 +16,7 @@ from django.db.models import Sum
 from django.db.models.functions import Coalesce
 
 from apps.notifications.models import Notification
+from apps.notifications.push import send_web_push
 
 
 def check_category_threshold(category) -> None:
@@ -46,7 +49,7 @@ def check_category_threshold(category) -> None:
     # is the real guarantee against duplicate alerts under concurrent
     # requests; this get_or_create just avoids relying on that constraint
     # raising an IntegrityError as the normal, expected path.
-    Notification.objects.get_or_create(
+    notification, created = Notification.objects.get_or_create(
         related_category=category,
         notif_type=notif_type,
         defaults={
@@ -55,3 +58,5 @@ def check_category_threshold(category) -> None:
             "channel": Notification.Channel.PUSH,
         },
     )
+    if created:
+        send_web_push.delay(notification.notification_id)

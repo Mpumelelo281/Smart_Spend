@@ -3,6 +3,7 @@ import { useState } from "react";
 import { api } from "../api/client.js";
 import FormField from "../components/FormField.jsx";
 import { IconEye, IconEyeOff, IconShield } from "../components/icons.jsx";
+import PushNotificationSettings from "../components/PushNotificationSettings.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { validatePassword, validateRequired } from "../validators.js";
 
@@ -10,6 +11,7 @@ function ProfileForm() {
   const { user, refreshUser } = useAuth();
   const profile = user?.profile;
 
+  const [fullName, setFullName] = useState(profile?.full_name ?? "");
   const [campus, setCampus] = useState(profile?.campus ?? "");
   const [residence, setResidence] = useState(profile?.residence ?? "");
   const [disbursementDay, setDisbursementDay] = useState(String(profile?.disbursement_day ?? 1));
@@ -21,13 +23,15 @@ function ProfileForm() {
   async function handleSubmit(e) {
     e.preventDefault();
 
+    const fullNameError = validateRequired("Full name")(fullName);
     const campusError = validateRequired("Campus")(campus);
-    setErrors({ campus: campusError });
-    if (campusError) return;
+    setErrors({ full_name: fullNameError, campus: campusError });
+    if (fullNameError || campusError) return;
 
     setStatus("saving");
     try {
       await api.patch("/auth/me/", {
+        full_name: fullName,
         campus,
         residence,
         disbursement_day: Number(disbursementDay),
@@ -52,6 +56,15 @@ function ProfileForm() {
           </p>
         </div>
 
+        <FormField
+          id="full_name"
+          label="Full name"
+          value={fullName}
+          onChange={setFullName}
+          validate={validateRequired("Full name")}
+          error={errors.full_name}
+          setError={setFieldError}
+        />
         <FormField
           id="campus"
           label="Campus"
@@ -370,6 +383,11 @@ export default function Profile() {
       <div className="mt-6 rounded-2xl bg-white p-6 shadow-card dark:bg-navy-900">
         <h2 className="mb-4 font-semibold text-slate-900 dark:text-white">Two-factor authentication</h2>
         <TwoFactorForm />
+      </div>
+
+      <div className="mt-6 rounded-2xl bg-white p-6 shadow-card dark:bg-navy-900">
+        <h2 className="mb-4 font-semibold text-slate-900 dark:text-white">Push notifications</h2>
+        <PushNotificationSettings />
       </div>
     </div>
   );

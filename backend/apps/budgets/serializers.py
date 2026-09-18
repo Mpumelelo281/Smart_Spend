@@ -1,3 +1,4 @@
+import logging
 from decimal import Decimal
 
 from django.db import transaction
@@ -6,7 +7,9 @@ from django.db.models.functions import Coalesce
 from rest_framework import serializers
 
 from .models import Budget, BudgetCategory, Transaction
-from .notifications import check_category_threshold
+from .tasks import dispatch_threshold_check
+
+logger = logging.getLogger(__name__)
 
 
 class BudgetCategoryInputSerializer(serializers.Serializer):
@@ -75,8 +78,23 @@ class TransactionSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         instance = super().create(validated_data)
-        # Rule 10. Synchronous for now — see apps/notifications/models.py.
-        check_category_threshold(instance.category)
+        # Rule 10: "never delays the response" — the threshold check
+        # normally runs on a Celery worker, not inline here (see tasks.py).
+        # But Rule 10 also requires the alert to actually fire, and .delay()
+        # only *enqueues* the check — if no broker/worker is reachable
+        # (e.g. local dev without Redis running), the task is silently
+        # never picked up and the alert never happens. Falling back to
+        # running it inline here trades away the "never blocks" property
+        # only in that already-degraded case, which is strictly better
+        # than an alert that silently never fires at all.
+        try:
+            dispatch_threshold_check.delay(instance.category_id)
+        except Exception:  # pylint: disable=broad-except
+            logger.warning(
+                "Could not enqueue dispatch_threshold_check (no Celery broker reachable?) — "
+                "running the threshold check inline instead."
+            )
+            dispatch_threshold_check(instance.category_id)
         return instance
 
 
@@ -145,6 +163,71 @@ class BudgetCreateSerializer(serializers.Serializer):
                 {"categories": "Category names must be unique within a budget."}
             )
 
+        attrs["total_allocated"] = total
+        return attrs
+
+    def create(self, validated_data):
+        profile = self.context["profile"]
+        categories_data = validated_data.pop("categories")
+
+        with transaction.atomic():
+            budget = Budget.objects.create(
+                profile=profile,
+                month=validated_data["month"],
+                year=validated_data["year"],
+                total_allocated=validated_data["total_allocated"],
+            )
+            BudgetCategory.objects.bulk_create(
+                [
+                    BudgetCategory(budget=budget, name=c["name"], allocated_amount=c["allocated_amount"])
+                    for c in categories_data
+                ]
+            )
+        return budget
+
+
+class BudgetCloneSerializer(serializers.Serializer):
+    """Recurring-budget convenience: clone an existing budget's category
+    allocations into a new month instead of re-typing them. Validation
+    mirrors BudgetCreateSerializer's exactly — cloning doesn't get to skip
+    Rule 1 just because these numbers were valid once already; the
+    student's allowance may have changed since.
+    """
+
+    month = serializers.IntegerField(min_value=1, max_value=12)
+    year = serializers.IntegerField(min_value=2024)
+
+    def validate(self, attrs):
+        source = self.context["source_budget"]
+        profile = self.context["profile"]
+
+        if Budget.objects.filter(profile=profile, month=attrs["month"], year=attrs["year"]).exists():
+            raise serializers.ValidationError(
+                {
+                    "non_field_errors": (
+                        "A budget already exists for that month; edit it instead of cloning into it."
+                    )
+                }
+            )
+
+        categories = list(source.categories.values("name", "allocated_amount"))
+        if not categories:
+            raise serializers.ValidationError(
+                {"non_field_errors": "The source budget has no categories to clone."}
+            )
+
+        total = sum((c["allocated_amount"] for c in categories), Decimal("0"))
+        if total > profile.allowance_amount:
+            raise serializers.ValidationError(
+                {
+                    "non_field_errors": (
+                        f"Cloned allocations total R{total}, which exceeds your "
+                        f"R{profile.allowance_amount} monthly allowance — edit the source budget first."
+                    )
+                }
+            )
+
+        attrs["categories"] = categories
         attrs["total_allocated"] = total
         return attrs
 

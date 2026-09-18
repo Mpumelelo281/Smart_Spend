@@ -21,6 +21,20 @@ def _isolate_from_local_dev_env(settings):
     settings.ENFORCE_EMAIL_DOMAIN_RESTRICTION = True
     settings.SKIP_AUTH_VERIFICATION_FOR_TESTING = False
     settings.SERPAPI_KEY = ""
+    settings.CHECKERS_API_BASE_URL = ""
+    settings.SHOPRITE_API_BASE_URL = ""
+    settings.MR_PRICE_API_BASE_URL = ""
+    # Unset by default so send_web_push's "not configured" early-return
+    # path runs, rather than a real network call to a push service.
+    # Tests that specifically exercise sending set these themselves and
+    # mock pywebpush.webpush (see test_push.py).
+    settings.VAPID_PUBLIC_KEY = ""
+    settings.VAPID_PRIVATE_KEY = ""
+    # No Celery worker runs in the test suite — tasks (e.g.
+    # budgets.tasks.dispatch_threshold_check) must execute inline so tests
+    # can assert on their effects without a broker.
+    settings.CELERY_TASK_ALWAYS_EAGER = True
+    settings.CELERY_TASK_EAGER_PROPAGATES = True
 
 
 @pytest.fixture(autouse=True)

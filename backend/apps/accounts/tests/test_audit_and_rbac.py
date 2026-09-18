@@ -9,6 +9,7 @@ def test_registration_writes_an_audit_entry(api_client):
     api_client.post(
         "/api/v1/auth/register/",
         {
+            "full_name": "Sipho Dlamini",
             "email": "sipho@dut4life.ac.za",
             "password": "Correct-Horse-9!",
             "campus": "City",

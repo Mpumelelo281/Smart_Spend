@@ -9,6 +9,7 @@ import { validateDutEmail, validatePassword, validateRequired } from "../validat
 
 export default function Register() {
   const [form, setForm] = useState({
+    full_name: "",
     email: "",
     password: "",
     campus: "",
@@ -32,6 +33,7 @@ export default function Register() {
     setFormError("");
 
     const nextErrors = {
+      full_name: validateRequired("Full name")(form.full_name),
       email: validateDutEmail(form.email),
       password: validatePassword(form.password),
       campus: validateRequired("Campus")(form.campus),
@@ -116,6 +118,16 @@ export default function Register() {
       subtitle="Track your NSFAS allowance and find the best prices."
     >
       <form onSubmit={handleSubmit} noValidate>
+        <FormField
+          id="full_name"
+          label="Full name"
+          value={form.full_name}
+          onChange={set("full_name")}
+          validate={validateRequired("Full name")}
+          error={errors.full_name}
+          setError={setFieldError}
+          autoComplete="name"
+        />
         <FormField
           id="email"
           label="DUT email address"

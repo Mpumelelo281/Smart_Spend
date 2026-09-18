@@ -302,9 +302,10 @@ class MeView(APIView):
         )
 
     def patch(self, request):
-        # campus/residence/disbursement_day only — allowance_amount and
-        # profile_id are read_only on StudentProfileSerializer, so a
-        # student editing their own profile can never touch either.
+        # full_name/campus/residence/disbursement_day only —
+        # allowance_amount and profile_id are read_only on
+        # StudentProfileSerializer, so a student editing their own profile
+        # can never touch either.
         profile = get_object_or_404(StudentProfile, user=request.user)
         serializer = StudentProfileSerializer(profile, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)

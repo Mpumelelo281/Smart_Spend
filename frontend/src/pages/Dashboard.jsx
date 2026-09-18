@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import { api } from "../api/client.js";
 import { IconChart, IconPlus, IconSearch, IconWallet } from "../components/icons.jsx";
+import RecommendationsWidget from "../components/RecommendationsWidget.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { validateMoneyAmount, validateRequired } from "../validators.js";
 
@@ -147,17 +148,28 @@ function LogExpenseForm({ budget, onLogged }) {
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const firstName = user?.email?.split("@")[0] ?? "there";
+  // Prefer the student's actual name (set at registration, editable on
+  // Profile) over the email-derived fallback — only ever falls back to
+  // the email's local part for an account that predates this field.
+  const firstName = user?.profile?.full_name?.trim().split(/\s+/)[0] || user?.email?.split("@")[0] || "there";
   const allowance = Number(user?.profile?.allowance_amount ?? 0);
 
   const [currentBudget, setCurrentBudget] = useState(undefined); // undefined = loading, null = none yet
+  // Most recent budget from an earlier month — offered as a one-click
+  // "copy last month's categories" starting point instead of retyping them
+  // (see BudgetCloneView server-side).
+  const [previousBudget, setPreviousBudget] = useState(null);
+  const [cloning, setCloning] = useState(false);
+  const [cloneError, setCloneError] = useState("");
 
   async function fetchCurrentBudget() {
     try {
       const { data } = await api.get("/budgets/");
+      // Already ordered -year,-month (see BudgetListCreateView.get_queryset).
       const budgets = data.results ?? data;
       const match = budgets.find((b) => b.month === now.getMonth() + 1 && b.year === now.getFullYear());
       setCurrentBudget(match ?? null);
+      setPreviousBudget(budgets.find((b) => b.budget_id !== match?.budget_id) ?? null);
     } catch {
       setCurrentBudget(null);
     }
@@ -166,6 +178,25 @@ export default function Dashboard() {
   useEffect(() => {
     fetchCurrentBudget();
   }, []);
+
+  async function cloneLastMonth() {
+    if (!previousBudget) return;
+    setCloning(true);
+    setCloneError("");
+    try {
+      await api.post(`/budgets/${previousBudget.budget_id}/clone/`, {
+        month: now.getMonth() + 1,
+        year: now.getFullYear(),
+      });
+      await fetchCurrentBudget();
+    } catch (err) {
+      setCloneError(
+        err.response?.data?.non_field_errors?.[0] || "Could not copy last month's budget."
+      );
+    } finally {
+      setCloning(false);
+    }
+  }
 
   const spent = currentBudget ? Number(currentBudget.total_spent) : 0;
   const remaining = allowance - spent;
@@ -257,15 +288,31 @@ export default function Dashboard() {
               </p>
             </div>
             {!currentBudget && (
-              <Link
-                to="/budgets/new"
-                className="hidden shrink-0 items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 font-semibold text-white shadow-card transition-colors hover:bg-brand-700 sm:flex"
-              >
-                <IconPlus className="h-4 w-4" />
-                Create budget
-              </Link>
+              <div className="hidden shrink-0 items-center gap-2 sm:flex">
+                {previousBudget && (
+                  <button
+                    onClick={cloneLastMonth}
+                    disabled={cloning}
+                    className="rounded-lg border border-slate-200 px-4 py-2.5 font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50 dark:border-navy-700 dark:text-slate-200 dark:hover:bg-navy-800"
+                  >
+                    {cloning ? "Copying…" : "Copy last month"}
+                  </button>
+                )}
+                <Link
+                  to="/budgets/new"
+                  className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 font-semibold text-white shadow-card transition-colors hover:bg-brand-700"
+                >
+                  <IconPlus className="h-4 w-4" />
+                  Create budget
+                </Link>
+              </div>
             )}
           </div>
+          {cloneError && (
+            <p role="alert" className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">
+              {cloneError}
+            </p>
+          )}
           {currentBudget && <LogExpenseForm budget={currentBudget} onLogged={fetchCurrentBudget} />}
         </div>
 
@@ -282,6 +329,8 @@ export default function Dashboard() {
           </div>
         </Link>
       </div>
+
+      {user?.role === "STUDENT" && <RecommendationsWidget />}
 
       <Link
         to="/history"

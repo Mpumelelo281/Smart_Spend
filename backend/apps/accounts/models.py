@@ -96,6 +96,10 @@ class StudentProfile(models.Model):
     profile_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="student_profile")
 
+    # blank=True at the model level (not required) so the migration that
+    # adds this doesn't break existing rows — RegisterSerializer is what
+    # actually requires it for every new registration.
+    full_name = models.CharField(max_length=150, blank=True)
     allowance_amount = models.DecimalField(max_digits=8, decimal_places=2, default="1650.00")
     disbursement_day = models.PositiveSmallIntegerField(
         validators=[MinValueValidator(1), MaxValueValidator(31)], default=1

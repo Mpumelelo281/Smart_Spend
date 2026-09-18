@@ -9,14 +9,18 @@ pytestmark = pytest.mark.django_db
 
 def test_patch_profile_updates_editable_fields(authenticated_client, student_user):
     response = authenticated_client.patch(
-        "/api/v1/auth/me/", {"campus": "Ritson", "residence": "New Res"}, format="json"
+        "/api/v1/auth/me/",
+        {"campus": "Ritson", "residence": "New Res", "full_name": "Thabo Nkosi"},
+        format="json",
     )
     assert response.status_code == 200
     assert response.data["profile"]["campus"] == "Ritson"
     assert response.data["profile"]["residence"] == "New Res"
+    assert response.data["profile"]["full_name"] == "Thabo Nkosi"
 
     student_user.student_profile.refresh_from_db()
     assert student_user.student_profile.campus == "Ritson"
+    assert student_user.student_profile.full_name == "Thabo Nkosi"
 
 
 def test_patch_profile_ignores_allowance_amount(authenticated_client, student_user):

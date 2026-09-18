@@ -29,6 +29,8 @@ export default function History() {
   const [budgets, setBudgets] = useState(null);
   const [error, setError] = useState("");
   const [selectedBudgetId, setSelectedBudgetId] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [forecast, setForecast] = useState(null);
 
   useEffect(() => {
     api
@@ -42,6 +44,43 @@ export default function History() {
       })
       .catch(() => setError("Could not load your budget history."));
   }, []);
+
+  async function exportExcel() {
+    setExporting(true);
+    try {
+      // The download needs the same Bearer token every other request
+      // sends (see api/client.js) — a plain <a href> can't attach that,
+      // so this fetches the file as a blob and triggers the save itself.
+      // A real .xlsx, not CSV: the backend formats it as a banded Excel
+      // Table with a bold header (see BudgetHistoryExportView) — CSV has
+      // no concept of formatting to carry that over.
+      const response = await api.get("/budgets/export/", { responseType: "blob" });
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "smartspend-budget-history.xlsx";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError("Could not export your budget history right now.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!budgets || budgets.length === 0) return;
+    // Mirrors the category-breakdown selection below: defaults to the most
+    // recent month until the student picks a different one.
+    const budget = budgets.find((b) => b.budget_id === selectedBudgetId) ?? budgets[budgets.length - 1];
+    setForecast(null);
+    api
+      .get(`/budgets/${budget.budget_id}/forecast/`)
+      .then(({ data }) => setForecast(data))
+      .catch(() => setForecast(null));
+  }, [budgets, selectedBudgetId]);
 
   if (error) {
     return <p className="text-sm font-medium text-red-600 dark:text-red-400">{error}</p>;
@@ -159,10 +198,50 @@ export default function History() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Spending history</h1>
-      <p className="mt-1 text-slate-500 dark:text-slate-400">
-        Allocated vs. actually spent, month by month.
-      </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Spending history</h1>
+          <p className="mt-1 text-slate-500 dark:text-slate-400">
+            Allocated vs. actually spent, month by month.
+          </p>
+        </div>
+        <button
+          onClick={exportExcel}
+          disabled={exporting}
+          className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-card transition-colors hover:bg-slate-50 disabled:opacity-50 dark:border-navy-700 dark:bg-navy-900 dark:text-slate-200 dark:hover:bg-navy-800"
+        >
+          {exporting ? "Exporting…" : "Export Excel"}
+        </button>
+      </div>
+
+      {forecast && (
+        <div className="mt-6 rounded-2xl bg-white p-6 shadow-card dark:bg-navy-900">
+          <h2 className="font-semibold text-slate-900 dark:text-white">
+            {forecast.days_elapsed >= forecast.days_in_month ? "Month summary" : "On track for"}
+          </h2>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            Projected from R{Number(forecast.total_spent).toFixed(2)} spent over{" "}
+            {forecast.days_elapsed} of {forecast.days_in_month} days.
+          </p>
+          <p
+            className={`mt-3 text-2xl font-extrabold ${
+              forecast.will_exceed_allowance
+                ? "text-red-600 dark:text-red-400"
+                : "text-emerald-600 dark:text-emerald-400"
+            }`}
+          >
+            R{Number(forecast.total_projected).toFixed(2)}{" "}
+            <span className="text-sm font-medium text-slate-400">
+              of R{Number(forecast.total_allocated).toFixed(2)} allocated
+            </span>
+          </p>
+          {forecast.will_exceed_allowance && (
+            <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">
+              At this pace you&apos;re on track to go over.
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="mt-6 rounded-2xl bg-white p-6 shadow-card dark:bg-navy-900">
         <div style={{ height: 320 }}>
