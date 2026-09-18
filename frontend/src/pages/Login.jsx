@@ -16,6 +16,20 @@ import {
 import { useAuth } from "../context/AuthContext.jsx";
 import { validateEmailFormat, validateRequired } from "../validators.js";
 
+// Only a 400 from the login endpoint means "wrong credentials" — anything
+// else (no response at all, a 5xx, a 429 rate limit) is a different
+// problem, and calling it "Invalid email or password" sends people off
+// retyping a correct password while the real fault goes unnoticed.
+function loginErrorMessage(err) {
+  const status = err.response?.status;
+  if (!err.response) {
+    return "Can't reach the server. It may be waking up — wait a moment and try again.";
+  }
+  if (status === 429) return "Too many attempts. Wait a minute and try again.";
+  if (status >= 500) return "The server ran into a problem. Please try again shortly.";
+  return err.response.data?.non_field_errors?.[0] || "Invalid email or password.";
+}
+
 // Two-step login mirrors the server exactly (see apps/accounts/views.py):
 // password verified -> either enrol in MFA (first login) or challenge an
 // existing TOTP device. No bearer token exists until step 2 succeeds.
@@ -30,12 +44,27 @@ export default function Login() {
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [resendState, setResendState] = useState(""); // "", "sending", "sent"
 
   const [step, setStep] = useState("credentials"); // credentials | mfa-setup | mfa-verify
   const [challenge, setChallenge] = useState(null);
   const [code, setCode] = useState("");
 
   const setFieldError = (id, message) => setErrors((prev) => ({ ...prev, [id]: message }));
+
+  // The server only says this once the password is correct, so it's safe
+  // to offer a resend for exactly this message — an account stuck as
+  // "unverified" otherwise has no way to get a fresh link.
+  const needsVerification = /verify your email/i.test(formError);
+
+  async function handleResendVerification() {
+    setResendState("sending");
+    try {
+      await api.post("/auth/resend-verification/", { email });
+    } finally {
+      setResendState("sent");
+    }
+  }
 
   async function handleCredentialsSubmit(e) {
     e.preventDefault();
@@ -74,7 +103,7 @@ export default function Login() {
       setChallenge(data);
       setStep(data.mfa_setup_required ? "mfa-setup" : "mfa-verify");
     } catch (err) {
-      setFormError(err.response?.data?.non_field_errors?.[0] || "Invalid email or password.");
+      setFormError(loginErrorMessage(err));
     } finally {
       setSubmitting(false);
     }
@@ -177,6 +206,21 @@ export default function Login() {
               {formError}
             </p>
           )}
+          {needsVerification &&
+            (resendState === "sent" ? (
+              <p className="-mt-2 mb-4 text-sm font-medium text-emerald-600 dark:text-emerald-400">
+                A new verification link is on its way.
+              </p>
+            ) : (
+              <button
+                type="button"
+                onClick={handleResendVerification}
+                disabled={resendState === "sending"}
+                className="-mt-2 mb-4 text-sm font-semibold text-brand-600 hover:underline disabled:opacity-50 dark:text-brand-400"
+              >
+                {resendState === "sending" ? "Sending…" : "Resend verification email"}
+              </button>
+            ))}
 
           <button
             type="submit"

@@ -76,12 +76,23 @@ class LoginSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
 
     def validate(self, attrs):
+        email = attrs["email"].lower().strip()
         user = authenticate(
             request=self.context.get("request"),
-            username=attrs["email"].lower().strip(),
+            username=email,
             password=attrs["password"],
         )
         if user is None:
+            # authenticate() also returns None for a *correct* password on
+            # an inactive account (User.is_active is derived from `status`,
+            # and a not-yet-verified student is PENDING_VERIFICATION). Left
+            # alone, that shows "Invalid email or password" to someone who
+            # typed everything right, and the "verify your email" message
+            # below could never be reached. Only revealed when the password
+            # matches, so this doesn't leak which emails are registered.
+            pending = User.objects.filter(email=email, status=User.Status.PENDING_VERIFICATION).first()
+            if pending is not None and pending.check_password(attrs["password"]):
+                raise serializers.ValidationError("Please verify your email address before logging in.")
             raise serializers.ValidationError("Invalid email or password.", code="authorization")
         if not user.email_verified:
             raise serializers.ValidationError("Please verify your email address before logging in.")
