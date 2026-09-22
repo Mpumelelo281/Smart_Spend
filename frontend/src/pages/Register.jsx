@@ -93,6 +93,10 @@ export default function Register() {
             </Link>
             .
           </p>
+          <p className="mt-2 text-xs text-slate-500 dark:text-slate-500">
+            This can take a few minutes to arrive. Check your Spam/Junk folder too — if it&apos;s still
+            not there after 5 minutes, use Resend below.
+          </p>
           {resent ? (
             <p className="mt-4 text-sm font-medium text-emerald-600 dark:text-emerald-400">
               New link sent.

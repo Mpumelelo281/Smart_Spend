@@ -93,7 +93,12 @@ class RegisterView(APIView):
         )
         log_action("USER_REGISTERED", actor=user, target=user, metadata={"email": user.email})
         return Response(
-            {"detail": "Registration successful. Check your DUT email to verify your account."},
+            {
+                "detail": (
+                    "Registration successful. Check your DUT email to verify your account "
+                    "— this can take a few minutes to arrive."
+                )
+            },
             status=status.HTTP_201_CREATED,
         )
 
