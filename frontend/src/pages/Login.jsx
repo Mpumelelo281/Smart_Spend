@@ -23,7 +23,7 @@ import { validateEmailFormat, validateRequired } from "../validators.js";
 function loginErrorMessage(err) {
   const status = err.response?.status;
   if (!err.response) {
-    return "Can't reach the server. It may be waking up — wait a moment and try again.";
+    return "Can't reach the server. It may be waking up after being idle — this can take up to a minute. Wait a moment, then try again.";
   }
   if (status === 429) return "Too many attempts. Wait a minute and try again.";
   if (status >= 500) return "The server ran into a problem. Please try again shortly.";
