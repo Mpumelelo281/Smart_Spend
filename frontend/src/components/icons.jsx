@@ -184,6 +184,24 @@ export function IconShield({ className }) {
   );
 }
 
+export function IconChat({ className }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} {...base}>
+      <path d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9l-4.4 3.3A.5.5 0 0 1 4 20V6a1 1 0 0 1 1-1Z" />
+      <path d="M8 10h8M8 13h5" />
+    </svg>
+  );
+}
+
+export function IconSend({ className }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} {...base}>
+      <path d="M22 2 11 13" />
+      <path d="M22 2 15 22l-4-9-9-4 20-7Z" />
+    </svg>
+  );
+}
+
 export function IconMenu({ className }) {
   return (
     <svg viewBox="0 0 24 24" className={className} {...base}>

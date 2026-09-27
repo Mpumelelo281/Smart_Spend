@@ -4,6 +4,7 @@ import { NavLink } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useCart } from "../context/CartContext.jsx";
 import { useTheme } from "../context/ThemeContext.jsx";
+import AssistantChat from "./AssistantChat.jsx";
 import {
   IconCart,
   IconChart,
@@ -163,6 +164,12 @@ export default function Layout({ children }) {
           <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">{children}</main>
         </div>
       </div>
+
+      {/* Backend-scoped to Student accounts (apps.assistant.views —
+          IsStudent) — only rendered for that role here to match, rather
+          than showing a bubble that 403s for Administrator/Student
+          Services logins. */}
+      {user?.role === "STUDENT" && <AssistantChat />}
     </div>
   );
 }

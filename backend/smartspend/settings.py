@@ -53,6 +53,7 @@ LOCAL_APPS = [
     "apps.recommendations",
     "apps.notifications",
     "apps.reporting",
+    "apps.assistant",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -159,6 +160,10 @@ REST_FRAMEWORK = {
         # NFR Security: rate limiting on authentication endpoints.
         "auth": "10/min",
         "mfa": "10/min",
+        # SpendWise chat — generous enough for normal back-and-forth typing,
+        # tight enough that a runaway frontend loop can't hammer the DB with
+        # per-message aggregate queries.
+        "assistant": "30/min",
     },
 }
 
