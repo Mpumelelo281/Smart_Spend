@@ -249,6 +249,13 @@ SKIP_AUTH_VERIFICATION_FOR_TESTING = env.bool("SKIP_AUTH_VERIFICATION_FOR_TESTIN
 SERPAPI_KEY = env("SERPAPI_KEY", default="")
 SERPAPI_GOOGLE_DOMAIN = env("SERPAPI_GOOGLE_DOMAIN", default="google.co.za")
 SERPAPI_COUNTRY = env("SERPAPI_COUNTRY", default="za")
+# Google's stronger, proximity-based localisation signal (its own docs
+# recommend `location` over `gl`/`google_domain` alone for surfacing
+# results that are actually sellable/nearby, not just interface language +
+# currency). Every DUT campus this app knows about is Durban/
+# Pietermaritzburg (see apps/catalog/geo.py's CAMPUS_COORDINATES) — a fixed
+# default is fine; override per-deployment if that ever changes.
+SERPAPI_LOCATION = env("SERPAPI_LOCATION", default="Durban, KwaZulu-Natal, South Africa")
 
 # apps/catalog/adapters/{checkers,shoprite,mr_price}.py — each stays inert
 # (is_configured() False, silently skipped by live_search.py) until its

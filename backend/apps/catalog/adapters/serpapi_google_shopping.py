@@ -24,6 +24,44 @@ logger = logging.getLogger(__name__)
 
 _breaker = pybreaker.CircuitBreaker(fail_max=3, reset_timeout=60)
 
+# Google Shopping is a global aggregator — `gl`/`google_domain` bias the
+# result *language and currency*, not which country the seller actually
+# operates in, so a plain query still surfaces genuine overseas retailers
+# (a UK or Australian shop that happens to also list on google.co.za).
+# There's no reliable "seller country" field in SerpApi's response to
+# filter on directly, so this is a best-effort signal from the one thing
+# we do get: the listing's own domain. A country-code TLD is strong
+# evidence (an actual .co.uk store isn't South African); a generic TLD
+# (.com, .co, .africa, ...) proves nothing either way and is let through
+# rather than guessed at — same "don't fabricate" principle as
+# NormalizedListing's other optional fields. Whatever slips past this can
+# still be hidden by flipping Retailer.is_active off in the admin.
+_NON_SOUTH_AFRICAN_TLDS = {
+    # Common ccTLDs likely to actually show up in a South African grocery/
+    # retail search. Note "sa" here is Saudi Arabia's ccTLD, not South
+    # Africa's (that's "za") — an easy mix-up.
+    "uk", "co.uk", "org.uk", "au", "com.au", "net.au", "nz", "co.nz",
+    "ca", "us", "de", "fr", "es", "it", "nl", "ie", "be", "ch", "at",
+    "se", "no", "dk", "fi", "pl", "pt", "gr", "cz", "hu", "ru",
+    "cn", "jp", "co.jp", "in", "co.in", "hk", "sg", "com.sg", "my",
+    "com.my", "br", "com.br", "mx", "com.mx", "tr", "ae", "sa", "eg",
+    "ng", "com.ng", "ke", "co.ke",
+}
+
+
+def _is_south_african_domain(base_url: str | None) -> bool:
+    """True unless the domain carries a *non*-South-African ccTLD — see the
+    module-level comment above for why this is "innocent until proven
+    foreign" rather than an allowlist."""
+    if not base_url:
+        return True
+    host = urlparse(base_url).netloc.lower().removeprefix("www.")
+    labels = host.split(".")
+    # Check both the last label (.com) and the last two (.co.uk) — ccTLDs
+    # are sometimes a single label, sometimes a second-level + country pair.
+    candidates = {labels[-1], ".".join(labels[-2:])} if len(labels) >= 2 else {host}
+    return candidates.isdisjoint(_NON_SOUTH_AFRICAN_TLDS)
+
 
 class SerpApiGoogleShoppingAdapter(RetailerAdapter):
     name = "serpapi_google_shopping"
@@ -55,6 +93,7 @@ class SerpApiGoogleShoppingAdapter(RetailerAdapter):
                 "q": query,
                 "google_domain": settings.SERPAPI_GOOGLE_DOMAIN,
                 "gl": settings.SERPAPI_COUNTRY,
+                "location": settings.SERPAPI_LOCATION,
                 "hl": "en",
                 "api_key": settings.SERPAPI_KEY,
             },
@@ -79,6 +118,9 @@ class SerpApiGoogleShoppingAdapter(RetailerAdapter):
             parsed = urlparse(link)
             if parsed.scheme and parsed.netloc:
                 base_url = f"{parsed.scheme}://{parsed.netloc}"
+
+        if not _is_south_african_domain(base_url):
+            return None
 
         return NormalizedListing(
             product_name=title,

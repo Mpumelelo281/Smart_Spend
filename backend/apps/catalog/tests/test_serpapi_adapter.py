@@ -3,7 +3,10 @@ import pytest
 import requests
 
 from apps.catalog.adapters.base import AdapterUnavailable
-from apps.catalog.adapters.serpapi_google_shopping import SerpApiGoogleShoppingAdapter
+from apps.catalog.adapters.serpapi_google_shopping import (
+    SerpApiGoogleShoppingAdapter,
+    _is_south_african_domain,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -47,6 +50,51 @@ def test_normalize_extracts_core_fields():
     assert listing.color is None
     assert listing.size is None
     assert listing.store_address is None
+
+
+def test_normalize_skips_a_listing_with_a_foreign_cctld():
+    raw = {
+        "title": "British Biscuits Tin",
+        "source": "BritishCravings",
+        "extracted_price": 199.00,
+        "product_link": "https://www.britishcravings.co.uk/some-product",
+    }
+    assert SerpApiGoogleShoppingAdapter._normalize(raw) is None
+
+
+def test_normalize_keeps_a_co_za_listing():
+    raw = {
+        "title": "Colgate Toothpaste",
+        "source": "Takealot",
+        "extracted_price": 24.99,
+        "product_link": "https://www.makro.co.za/some-product",
+    }
+    assert SerpApiGoogleShoppingAdapter._normalize(raw) is not None
+
+
+def test_normalize_keeps_a_listing_with_no_link_at_all():
+    """No link means no domain signal either way — abstain, don't guess
+    foreign (see the module-level comment on _is_south_african_domain)."""
+    raw = {"title": "Colgate Toothpaste", "source": "Some Store", "extracted_price": 24.99}
+    assert SerpApiGoogleShoppingAdapter._normalize(raw) is not None
+
+
+class TestIsSouthAfricanDomain:
+    def test_no_url_abstains_as_south_african(self):
+        assert _is_south_african_domain(None) is True
+
+    def test_co_za_is_south_african(self):
+        assert _is_south_african_domain("https://www.checkers.co.za") is True
+
+    def test_generic_com_abstains_as_south_african(self):
+        # takealot.com has no ccTLD at all — nothing to prove it's foreign.
+        assert _is_south_african_domain("https://www.takealot.com") is True
+
+    def test_co_uk_is_rejected(self):
+        assert _is_south_african_domain("https://www.example.co.uk") is False
+
+    def test_saudi_arabia_sa_is_rejected_not_confused_with_south_africa(self):
+        assert _is_south_african_domain("https://www.example.sa") is False
 
 
 def test_search_wraps_request_exceptions_as_adapter_unavailable(settings, monkeypatch):
