@@ -5,6 +5,7 @@ import { api } from "../api/client.js";
 import { IconChart, IconPlus, IconSearch, IconWallet } from "../components/icons.jsx";
 import RecommendationsWidget from "../components/RecommendationsWidget.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
+import { suggestCategoryId } from "../utils/categorySuggestion.js";
 import { validateMoneyAmount, validateRequired } from "../validators.js";
 
 const now = new Date();
@@ -24,8 +25,31 @@ function LogExpenseForm({ budget, onLogged }) {
   const [description, setDescription] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  // Once the student has picked a category themselves, an auto-suggestion
+  // from what they type next must never quietly override that choice —
+  // see suggestCategoryId's docstring.
+  const [categoryTouched, setCategoryTouched] = useState(false);
+  const [suggested, setSuggested] = useState(false);
 
   const isOther = categoryId === OTHER_CATEGORY;
+
+  function handleDescriptionChange(value) {
+    setDescription(value);
+    if (categoryTouched) return;
+    const suggestion = suggestCategoryId(value, budget.categories);
+    if (suggestion) {
+      setCategoryId(suggestion);
+      setSuggested(true);
+    } else {
+      setSuggested(false);
+    }
+  }
+
+  function handleCategoryChange(value) {
+    setCategoryId(value);
+    setCategoryTouched(true);
+    setSuggested(false);
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -63,6 +87,8 @@ function LogExpenseForm({ budget, onLogged }) {
       setDescription("");
       setCustomCategoryName("");
       setCategoryId(budget.categories[0]?.category_id ?? "");
+      setCategoryTouched(false);
+      setSuggested(false);
       await onLogged();
     } catch (err) {
       setError(err.response?.data?.amount?.[0] || "Could not log that expense. Please try again.");
@@ -76,11 +102,14 @@ function LogExpenseForm({ budget, onLogged }) {
       <div className="flex-1 min-w-[140px]">
         <label htmlFor="expense-category" className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">
           Category
+          {suggested && !categoryTouched && (
+            <span className="ml-1 font-normal text-brand-600 dark:text-brand-400">(suggested)</span>
+          )}
         </label>
         <select
           id="expense-category"
           value={categoryId}
-          onChange={(e) => setCategoryId(e.target.value)}
+          onChange={(e) => handleCategoryChange(e.target.value)}
           className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 focus:border-brand-500 focus:bg-white focus:outline-none dark:border-navy-700 dark:bg-navy-800 dark:text-white"
         >
           {budget.categories.map((c) => (
@@ -125,7 +154,7 @@ function LogExpenseForm({ budget, onLogged }) {
         <input
           id="expense-desc"
           value={description}
-          onChange={(e) => setDescription(e.target.value)}
+          onChange={(e) => handleDescriptionChange(e.target.value)}
           placeholder="e.g. Bread and milk"
           className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 focus:border-brand-500 focus:bg-white focus:outline-none dark:border-navy-700 dark:bg-navy-800 dark:text-white"
         />
@@ -324,7 +353,7 @@ export default function Dashboard() {
             <IconSearch className="h-6 w-6" />
           </div>
           <div>
-            <p className="font-semibold text-slate-900 dark:text-white">Compare prices</p>
+            <p className="font-semibold text-slate-900 dark:text-white">AI Search</p>
             <p className="text-sm text-slate-500 dark:text-slate-400">Find the best deal nearby.</p>
           </div>
         </Link>

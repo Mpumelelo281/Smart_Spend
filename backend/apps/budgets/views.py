@@ -23,6 +23,7 @@ from .serializers import (
     BudgetCloneSerializer,
     BudgetCreateSerializer,
     BudgetSerializer,
+    TransactionDetailSerializer,
     TransactionSerializer,
 )
 
@@ -69,6 +70,28 @@ class TransactionCreateView(generics.CreateAPIView):
     permission_classes = [permissions.IsAuthenticated, IsStudent]
     serializer_class = TransactionSerializer
     queryset = Transaction.objects.all()
+
+
+class BudgetTransactionListView(generics.ListAPIView):
+    """The itemized 'slip' behind the History page's category-breakdown
+    chart and item list — every transaction logged against one budget,
+    newest first. A bare array (like NotificationListView), not the
+    project's default paginated envelope: bounded to one month's worth of
+    a single student's spending, which the History page wants to render
+    (and group by category) all at once.
+    """
+
+    permission_classes = [permissions.IsAuthenticated, IsStudent]
+    serializer_class = TransactionDetailSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        budget = get_object_or_404(Budget, pk=self.kwargs["pk"], profile__user=self.request.user)
+        return (
+            Transaction.objects.filter(category__budget=budget)
+            .select_related("category")
+            .order_by("-purchase_date", "-created_at")
+        )
 
 
 class BudgetCloneView(APIView):

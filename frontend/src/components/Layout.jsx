@@ -23,7 +23,7 @@ import NotificationBell from "./NotificationBell.jsx";
 const navItems = [
   { to: "/", label: "Dashboard", icon: IconDashboard, end: true },
   { to: "/budgets/new", label: "Budget", icon: IconWallet },
-  { to: "/search", label: "Search prices", icon: IconSearch },
+  { to: "/search", label: "AI Search", icon: IconSearch },
   { to: "/cart", label: "Cart", icon: IconCart, badge: "cart" },
   { to: "/history", label: "History", icon: IconChart },
 ];

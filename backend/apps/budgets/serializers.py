@@ -98,6 +98,22 @@ class TransactionSerializer(serializers.ModelSerializer):
         return instance
 
 
+class TransactionDetailSerializer(serializers.ModelSerializer):
+    """The itemized 'slip' behind the category-breakdown chart on the
+    History page — every logged transaction for one budget, with its
+    category name attached so the frontend can group them without a second
+    round trip. Distinct from TransactionSerializer (that one's for
+    *creating* a transaction, keyed by category id only; this one's
+    read-only and adds category_name for display).
+    """
+
+    category_name = serializers.CharField(source="category.name", read_only=True)
+
+    class Meta:
+        model = Transaction
+        fields = ["transaction_id", "category", "category_name", "amount", "purchase_date", "description"]
+
+
 class BudgetSerializer(serializers.ModelSerializer):
     categories = BudgetCategorySerializer(many=True, read_only=True)
     total_spent = serializers.SerializerMethodField()

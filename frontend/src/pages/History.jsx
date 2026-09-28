@@ -18,6 +18,22 @@ const MONTH_NAMES = Array.from({ length: 12 }, (_, i) =>
   new Date(2000, i, 1).toLocaleString("en-ZA", { month: "short" })
 );
 
+// The month to show until the student picks a different one from the
+// dropdown. Must match Dashboard's own "current budget" rule (real
+// calendar month/year, not just "the last one in the list") — otherwise,
+// the moment a budget exists for any month later than today (e.g. set up
+// ahead of time), this page silently defaults to that empty future month
+// instead of the one the student is actually logging expenses against.
+// Falls back to the most recent budget only when none matches today at all
+// (e.g. only past budgets exist).
+function defaultBudget(budgets) {
+  const now = new Date();
+  return (
+    budgets.find((b) => b.month === now.getMonth() + 1 && b.year === now.getFullYear()) ??
+    budgets[budgets.length - 1]
+  );
+}
+
 // Same two colours as the monthly Allocated/Spent chart below, reused here
 // for the category breakdown so the meaning of "blue = allocated, green =
 // spent" stays consistent across both charts on this page.
@@ -31,6 +47,7 @@ export default function History() {
   const [selectedBudgetId, setSelectedBudgetId] = useState("");
   const [exporting, setExporting] = useState(false);
   const [forecast, setForecast] = useState(null);
+  const [transactions, setTransactions] = useState(null);
 
   useEffect(() => {
     api
@@ -72,14 +89,22 @@ export default function History() {
 
   useEffect(() => {
     if (!budgets || budgets.length === 0) return;
-    // Mirrors the category-breakdown selection below: defaults to the most
-    // recent month until the student picks a different one.
-    const budget = budgets.find((b) => b.budget_id === selectedBudgetId) ?? budgets[budgets.length - 1];
+    const budget = budgets.find((b) => b.budget_id === selectedBudgetId) ?? defaultBudget(budgets);
     setForecast(null);
     api
       .get(`/budgets/${budget.budget_id}/forecast/`)
       .then(({ data }) => setForecast(data))
       .catch(() => setForecast(null));
+  }, [budgets, selectedBudgetId]);
+
+  useEffect(() => {
+    if (!budgets || budgets.length === 0) return;
+    const budget = budgets.find((b) => b.budget_id === selectedBudgetId) ?? defaultBudget(budgets);
+    setTransactions(null);
+    api
+      .get(`/budgets/${budget.budget_id}/transactions/`)
+      .then(({ data }) => setTransactions(data))
+      .catch(() => setTransactions([]));
   }, [budgets, selectedBudgetId]);
 
   if (error) {
@@ -144,14 +169,25 @@ export default function History() {
     },
   };
 
-  // Category breakdown: defaults to the most recent month (budgets is
-  // chronological ascending, see the reverse() above) until the student
-  // picks a different one from the dropdown.
-  const selectedBudget =
-    budgets.find((b) => b.budget_id === selectedBudgetId) ?? budgets[budgets.length - 1];
+  // Category breakdown: defaults to the real current month (see
+  // defaultBudget above) until the student picks a different one.
+  const selectedBudget = budgets.find((b) => b.budget_id === selectedBudgetId) ?? defaultBudget(budgets);
   const categories = selectedBudget.categories;
 
   const categoryLabels = categories.map((c) => c.name);
+
+  // Groups the flat transaction list (fetched per selected month, above)
+  // by category name — the same names the category chart already uses, so
+  // both stay in sync without a second lookup. `transactions` is null
+  // while that fetch is in flight; treated as "no items yet" rather than
+  // blocking the rest of the page, same reasoning as `forecast` above.
+  const transactionsByCategory = {};
+  (transactions ?? []).forEach((t) => {
+    (transactionsByCategory[t.category_name] ??= []).push(t);
+  });
+
+  const MAX_TOOLTIP_ITEMS = 6;
+
   const categoryData = {
     labels: categoryLabels,
     datasets: [
@@ -183,7 +219,23 @@ export default function History() {
     plugins: {
       legend: { labels: { color: tickColor } },
       tooltip: {
-        callbacks: { label: (ctx) => `${ctx.dataset.label}: R${ctx.parsed.x.toFixed(2)}` },
+        callbacks: {
+          label: (ctx) => `${ctx.dataset.label}: R${ctx.parsed.x.toFixed(2)}`,
+          // Which items made up this category's spending — only on the
+          // "Spent" bar, since "Allocated" has no items behind it.
+          afterLabel: (ctx) => {
+            if (ctx.dataset.label !== "Spent") return "";
+            const items = transactionsByCategory[categoryLabels[ctx.dataIndex]] || [];
+            if (items.length === 0) return "";
+            const lines = items
+              .slice(0, MAX_TOOLTIP_ITEMS)
+              .map((t) => `  • ${t.description || "Other"} — R${Number(t.amount).toFixed(2)}`);
+            if (items.length > MAX_TOOLTIP_ITEMS) {
+              lines.push(`  + ${items.length - MAX_TOOLTIP_ITEMS} more`);
+            }
+            return lines;
+          },
+        },
       },
     },
     scales: {
@@ -286,6 +338,58 @@ export default function History() {
                   {c.name} is R{(Number(c.spent_amount) - Number(c.allocated_amount)).toFixed(2)} over
                 </span>
               ))}
+          </div>
+        )}
+      </div>
+
+      <div className="mt-6 rounded-2xl bg-white p-6 shadow-card dark:bg-navy-900">
+        <h2 className="font-semibold text-slate-900 dark:text-white">Itemized spending</h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          Every expense logged this month, like a slip — by category.
+        </p>
+
+        {transactions === null ? (
+          <p className="mt-4 text-sm text-slate-400">Loading…</p>
+        ) : transactions.length === 0 ? (
+          <p className="mt-4 text-sm text-slate-400">No expenses logged for this month yet.</p>
+        ) : (
+          <div className="mt-4 space-y-5">
+            {categories
+              .filter((c) => (transactionsByCategory[c.name] || []).length > 0)
+              .map((c) => {
+                const items = transactionsByCategory[c.name] || [];
+                return (
+                  <div key={c.category_id}>
+                    <div className="flex items-baseline justify-between border-b border-slate-100 pb-1.5 dark:border-navy-800">
+                      <h3 className="text-sm font-semibold text-slate-900 dark:text-white">{c.name}</h3>
+                      <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                        R{Number(c.spent_amount).toFixed(2)} total
+                      </span>
+                    </div>
+                    <ul>
+                      {items.map((t) => (
+                        <li
+                          key={t.transaction_id}
+                          className="flex items-center justify-between border-b border-slate-50 py-2 text-sm last:border-0 dark:border-navy-800/60"
+                        >
+                          <span className="text-slate-700 dark:text-slate-300">
+                            {t.description || "Other"}
+                            <span className="ml-2 text-xs text-slate-400">
+                              {new Date(t.purchase_date).toLocaleDateString("en-ZA", {
+                                day: "numeric",
+                                month: "short",
+                              })}
+                            </span>
+                          </span>
+                          <span className="font-medium text-slate-900 dark:text-white">
+                            R{Number(t.amount).toFixed(2)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
           </div>
         )}
       </div>

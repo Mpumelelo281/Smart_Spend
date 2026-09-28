@@ -10,6 +10,7 @@ urlpatterns = [
     path("<uuid:pk>/", views.BudgetDetailView.as_view(), name="budget-detail"),
     path("<uuid:pk>/clone/", views.BudgetCloneView.as_view(), name="budget-clone"),
     path("<uuid:pk>/forecast/", views.BudgetForecastView.as_view(), name="budget-forecast"),
+    path("<uuid:pk>/transactions/", views.BudgetTransactionListView.as_view(), name="budget-transactions"),
     path(
         "<uuid:budget_id>/categories/",
         views.BudgetCategoryCreateView.as_view(),
